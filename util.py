@@ -195,3 +195,24 @@ def get_train_test(
         X, y, test_size=test_size, shuffle=False, random_state=random_state
     )
     return TrainTestData(X_train, y_train, X_test, y_test)
+
+def plot_training_curve(history, show=False):
+    """Grafica la pérdida de entrenamiento y validación a lo largo de las épocas.
+
+    Recibe el objeto `History` devuelto por `model.fit()` y genera una figura
+    con las curvas `loss` y `val_loss`. Si `show=True`, llama a `plt.show()`;
+    en caso contrario, devuelve la figura sin mostrarla (útil en notebooks o
+    cuando se quiere guardar el plot más adelante).
+    """
+    fig = plt.figure(figsize=(8, 4))
+    plt.plot(history.history['loss'], label='Train loss')
+    plt.plot(history.history['val_loss'], label='Validation loss')
+    plt.xlabel('Épocas')
+    plt.ylabel('Pérdida')
+    plt.title('Evolución de la pérdida')
+    plt.legend()
+    plt.grid(True)
+    if show:
+        plt.tight_layout()
+        plt.show()
+    return fig
