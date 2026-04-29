@@ -61,6 +61,21 @@ jupyter notebook
 
 Los notebooks de modelos estan en `model/`. Estan preparados para importar `util.py` desde la raiz y seguir usando la carpeta raiz `data/`.
 
+## Seguimiento de Experimentos con MLflow
+
+Los notebooks de redes neuronales registran cada run en MLflow: parámetros, métricas por época (`train_loss`, `val_loss`), MAE final de train/validación/test, curva de perdida y el modelo serializado.
+
+Los experimentos se almacenan en `model/mlruns/` (excluido del repositorio vía `.gitignore`).
+
+Para visualizar los resultados, lanzar la interfaz local desde el subdirectorio `model/`:
+
+```bash
+cd model
+mlflow ui
+```
+
+Esto arranca un servidor en [http://localhost:5000](http://localhost:5000) donde se pueden comparar runs, ver curvas de entrenamiento y consultar los artefactos de cada experimento.
+
 ## Funcionalidades Reutilizables
 
 El repositorio esta organizado para que los notebooks de modelos contengan el minimo codigo posible: definir la arquitectura, entrenarla y guardar sus metricas. La carga de datos, la creacion de ventanas temporales, la particion train/test y la comparacion contra benchmarks se reutilizan desde `util.py`.
@@ -146,12 +161,11 @@ Por tanto, no basta con reportar el MAE aislado de cada modelo. Cada notebook de
 1. Cargar o regenerar los datos con `Lectura_datos.ipynb`.
 2. Generar el benchmark clasico con `model/regresion_lineal.ipynb`.
 3. Entrenar modelos neuronales para todas las ventanas.
-4. Guardar resultados con:
-   - MAE de entrenamiento.
-   - MAE de validacion.
-   - MAE de test.
-   - Numero de parametros.
-   - Numero de epocas entrenadas.
+4. Guardar resultados con MLflow (automático en cada notebook de modelo):
+   - MAE de entrenamiento, validación y test.
+   - Curvas de pérdida por epoca.
+   - Número de parámetros y épocas entrenadas.
+   - Modelo serializado como artefacto.
 5. Generar tablas y graficas comparativas.
 6. Seleccionar el mejor modelo por combinacion de ventanas.
 7. Para la parte de investigacion, aplicar tecnicas de preprocesado financiero y comparar su efecto.
