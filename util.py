@@ -5,6 +5,7 @@ from __future__ import annotations
 from functools import lru_cache
 from pathlib import Path
 from typing import NamedTuple
+from urllib.parse import unquote, urlparse
 
 import numpy as np
 import pandas as pd
@@ -14,6 +15,9 @@ from sklearn.model_selection import train_test_split
 
 
 DATA_DIR = Path(__file__).parent / "data"
+PROJECT_ROOT = Path(__file__).parent
+MLFLOW_DB_PATH = PROJECT_ROOT / "model" / "mlflow.db"
+MLFLOW_ARTIFACT_ROOT = PROJECT_ROOT / "model" / "mlruns"
 RANDOM_SEED = 42  # mismo seed que en Lectura_datos.ipynb
 
 GRID_KEYS = ["input_window", "output_window"]
@@ -216,3 +220,146 @@ def plot_training_curve(history, show=False):
         plt.tight_layout()
         plt.show()
     return fig
+
+
+def configure_mlflow(
+    experiment_name: str,
+    tracking_db_path: str | Path = MLFLOW_DB_PATH,
+    artifact_root: str | Path = MLFLOW_ARTIFACT_ROOT,
+):
+    """Configura MLflow para usar la base SQLite compartida del proyecto.
+
+    Si el experimento no existe, lo crea con artefactos locales bajo
+    model/mlruns/. Esto evita depender de rutas absolutas de otros equipos.
+    Devuelve el modulo `mlflow` ya configurado para que los notebooks puedan
+    usarlo sin repetir boilerplate.
+    """
+    import mlflow
+    from mlflow.tracking import MlflowClient
+
+    tracking_db_path = Path(tracking_db_path).resolve()
+    artifact_root = Path(artifact_root).resolve()
+    tracking_uri = f"sqlite:///{tracking_db_path.as_posix()}"
+
+    mlflow.set_tracking_uri(tracking_uri)
+    client = MlflowClient(tracking_uri=tracking_uri)
+
+    experiment = client.get_experiment_by_name(experiment_name)
+    if experiment is None:
+        safe_name = "".join(
+            char if char.isalnum() or char in ("-", "_") else "_"
+            for char in experiment_name
+        )
+        artifact_location = (artifact_root / safe_name).as_uri()
+        client.create_experiment(
+            experiment_name,
+            artifact_location=artifact_location,
+        )
+
+    mlflow.set_experiment(experiment_name)
+    return mlflow
+
+
+def _local_artifact_path(artifact_uri: str) -> Path | None:
+    """Devuelve una ruta local para URIs de artefactos locales."""
+    parsed = urlparse(artifact_uri)
+    if parsed.scheme == "file":
+        return Path(unquote(parsed.path))
+    if parsed.scheme:
+        return None
+    return Path(artifact_uri)
+
+
+def _can_write_artifacts(artifact_uri: str) -> bool:
+    """Comprueba si el artifact_uri actual permite escribir artefactos."""
+    artifact_path = _local_artifact_path(artifact_uri)
+    if artifact_path is None:
+        return False
+
+    try:
+        artifact_path.mkdir(parents=True, exist_ok=True)
+        probe = artifact_path / ".write_test"
+        probe.write_text("ok", encoding="utf-8")
+        probe.unlink()
+    except OSError:
+        return False
+
+    return True
+
+
+def log_keras_grid_run(
+    mlflow,
+    model,
+    history,
+    run_name: str,
+    model_name: str,
+    input_window: int,
+    output_window: int,
+    metrics_row: dict,
+    train_shape: tuple[int, ...],
+    test_shape: tuple[int, ...],
+    output_dim: int,
+    batch_size: int,
+    learning_rate: float,
+    validation_split: float,
+    extra_params: dict | None = None,
+    log_model_artifact: bool = True,
+) -> None:
+    """Registra en MLflow una ejecucion de Keras para una celda del grid.
+
+    Mantiene nombres de metricas compatibles con `regresion_lineal.ipynb`:
+    train_mae, val_mae y test_mae. Tambien registra las curvas por epoca para
+    poder compararlas desde la UI de MLflow.
+    """
+    existing_runs = mlflow.search_runs(
+        filter_string=f'tags.mlflow.runName = "{run_name}"'
+    )
+    if not existing_runs.empty:
+        for run_id in existing_runs["run_id"]:
+            mlflow.delete_run(run_id)
+
+    with mlflow.start_run(run_name=run_name):
+        mlflow.set_tag("model_family", "MLP")
+        mlflow.set_tag("model_name", model_name)
+
+        params = {
+            "model_type": "Dense_Neural_Network",
+            "model_name": model_name,
+            "input_window_size": input_window,
+            "output_window_size": output_window,
+            "input_dim": train_shape[1],
+            "output_dim": output_dim,
+            "num_train_samples": train_shape[0],
+            "num_test_samples": test_shape[0],
+            "batch_size": batch_size,
+            "learning_rate": learning_rate,
+            "validation_split": validation_split,
+            "epochs": metrics_row["epochs"],
+            "n_params": metrics_row["n_params"],
+        }
+        if extra_params:
+            params.update(extra_params)
+        mlflow.log_params(params)
+
+        for epoch, (loss, val_loss) in enumerate(
+            zip(history.history["loss"], history.history["val_loss"]),
+            start=1,
+        ):
+            mlflow.log_metric("train_loss", float(loss), step=epoch)
+            mlflow.log_metric("val_loss", float(val_loss), step=epoch)
+
+        mlflow.log_metric("train_mae", float(metrics_row["MAE_train"]))
+        mlflow.log_metric("val_mae", float(metrics_row["MAE_val"]))
+        mlflow.log_metric("test_mae", float(metrics_row["MAE_test"]))
+
+        artifact_uri = mlflow.get_artifact_uri()
+        if _can_write_artifacts(artifact_uri):
+            fig = plot_training_curve(history)
+            mlflow.log_figure(fig, "plots/loss_curve.png")
+            plt.close(fig)
+
+            if log_model_artifact:
+                mlflow.keras.log_model(model, name=f"{model_name}_model")
+        else:
+            mlflow.set_tag("artifacts_logged", "false")
+            mlflow.set_tag("artifact_uri", artifact_uri)
