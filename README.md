@@ -36,8 +36,11 @@ La carga y generacion de ventanas se centraliza en `util.py`.
 │   ├── model_base_file.ipynb     # Plantilla minima para nuevos modelos
 │   ├── regresion_lineal.ipynb    # Benchmark clasico de regresion lineal
 │   ├── mlp_multilayer_perceptron.ipynb
-│   ├── rnn-lstm.ipynb            # Red neuronal recurrente con LSTM
-│   └── rnn-gru.ipynb             # Red neuronal recurrente con GRU
+│   ├── rnn-lstm.ipynb            # Prototipo inicial LSTM (ventana unica)
+│   ├── rnn-gru.ipynb             # Prototipo inicial GRU (ventana unica)
+│   └── rnn/                      # Busqueda de hiperparametros por ventana
+│       ├── lstm/                 # Notebooks hp_search por combinacion de ventanas (LSTM)
+│       └── gru/                  # Notebooks hp_search por combinacion de ventanas (GRU)
 ├── Lectura_datos.ipynb           # Lectura, limpieza y guardado de datos
 ├── util.py                       # Funciones comunes de datos, benchmarks y graficas
 ├── requirements.txt              # Dependencias Python del proyecto
