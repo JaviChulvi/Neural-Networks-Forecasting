@@ -1,42 +1,42 @@
-# RNN vs Regresión Lineal — Informe de Resultados
+# RNN vs Linear Regression — Results Report
 
-Generado a partir de los notebooks `rnn/lstm/` y `rnn/gru/` y de `data/lr_benchmark.csv`.
+Generated from notebooks `rnn/lstm/` and `rnn/gru/` and from `data/lr_benchmark.csv`.
 
-Incluye dos arquitecturas recurrentes:
-- **LSTM** — 2 etapas de HP search por ventana (`lstm_layers × units × dropout`, luego `lr × batch_size`)
-- **GRU**  — misma metodología, con `gru_layers ∈ {1, 2, 3}` y `units ∈ {32, 64, 128, 256}`
-
----
-
-## Conclusión principal
-
-- MAE test medio **LSTM tuneada** : `0.005362`
-- MAE test medio **GRU tuneada**  : `0.005367`
-- MAE test medio **regresión lineal** : `0.005668`
-- Mejor arquitectura RNN global  : **LSTM** (mean test MAE = `0.005362`)
-- Ventanas donde LSTM tuneada mejora a LR : **14 / 16**
-- Ventanas donde GRU tuneada mejora a LR  : **15 / 16**
-
-Ambas arquitecturas superan a la regresión lineal en la gran mayoría de ventanas. La ventaja es
-pequeña con ventanas de entrada cortas (`input=5/10`) y salidas largas (`output=90`), donde la
-señal disponible es muy suave. Con `input=90` las RNNs logran las mayores mejoras relativas
-(hasta ~−14 % en test MAE), ya que aprovechan la historia larga mejor que el modelo lineal.
+Two recurrent architectures are included:
+- **LSTM** — 2-stage HP search per window (`lstm_layers × units × dropout`, then `lr × batch_size`)
+- **GRU**  — same methodology, with `gru_layers ∈ {1, 2, 3}` and `units ∈ {32, 64, 128, 256}`
 
 ---
 
-## Ranking de modelos
+## Main Conclusion
 
-> `wins_vs_lr` = ventanas donde el modelo supera a LR
-> `wins_best_rnn` = ventanas donde este modelo es el mejor RNN de los dos
+- Mean test MAE **tuned LSTM** : `0.005362`
+- Mean test MAE **tuned GRU**  : `0.005367`
+- Mean test MAE **linear regression** : `0.005668`
+- Best global RNN architecture : **LSTM** (mean test MAE = `0.005362`)
+- Windows where tuned LSTM beats LR : **14 / 16**
+- Windows where tuned GRU beats LR  : **15 / 16**
+
+Both architectures outperform linear regression in the vast majority of windows. The advantage is
+small for short input windows (`input=5/10`) and long outputs (`output=90`), where the available
+signal is very weak. With `input=90` the RNNs achieve the largest relative improvements
+(up to ~−14 % in test MAE), exploiting the long history better than the linear model.
+
+---
+
+## Model Ranking
+
+> `wins_vs_lr` = windows where the model beats LR
+> `wins_best_rnn` = windows where this model is the better of the two RNNs
 
 | model | mean_test | median_test | best_test | worst_test | mean_delta_lr | wins_vs_lr | wins_best_rnn | mean_params |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| LSTM | 0.005362 | 0.003962 | 0.001275 | 0.012256 | -0.000306 | 14 | 12 | 51,914 |
-| GRU | 0.005367 | 0.003975 | 0.001269 | 0.012262 | -0.000301 | 15 | 4 | 75,841 |
+| LSTM | 0.005362 | 0.003962 | 0.001275 | 0.012256 | -0.000306 | 14 | 12 | 51914 |
+| GRU | 0.005367 | 0.003975 | 0.001269 | 0.012262 | -0.000301 | 15 | 4 | 75841 |
 
 ---
 
-## Mejor RNN por ventana
+## Best RNN Per Window
 
 | Salida \ Entrada | in=5 | in=10 | in=30 | in=90 |
 |:---:|:---:|:---:|:---:|:---:|
@@ -49,7 +49,7 @@ señal disponible es muy suave. Con `input=90` las RNNs logran las mayores mejor
 
 ---
 
-## Mejor RNN per ventana — detalle
+## Best RNN Per Window — Detail
 
 | input_window | output_window | model_type | MAE_test | MAE_test_lr | delta | pct_delta |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -72,29 +72,29 @@ señal disponible es muy suave. Con `input=90` las RNNs logran las mayores mejor
 
 ---
 
-## Matrices de MAE test
+## Test MAE Matrices
 
-### LSTM tuneada
+### Tuned LSTM
 
-| Salida \ Entrada | in=5 | in=10 | in=30 | in=90 |
+| Output \ Input | in=5 | in=10 | in=30 | in=90 |
 |:---:|:---:|:---:|:---:|:---:|
 | **out=1** | `0.012238` | `0.012234` | `0.012244` | `0.012256` |
 | **out=5** | `0.005586` | `0.005582` | `0.005584` | `0.005594` |
 | **out=30** | `0.002325` | `0.002334` | `0.002340` | `0.002343` |
 | **out=90** | `0.001275` | `0.001285` | `0.001276` | `0.001299` |
 
-### GRU tuneada
+### Tuned GRU
 
-| Salida \ Entrada | in=5 | in=10 | in=30 | in=90 |
+| Output \ Input | in=5 | in=10 | in=30 | in=90 |
 |:---:|:---:|:---:|:---:|:---:|
 | **out=1** | `0.012244` | `0.012247` | `0.012240` | `0.012262` |
 | **out=5** | `0.005593` | `0.005584` | `0.005597` | `0.005621` |
 | **out=30** | `0.002337` | `0.002334` | `0.002366` | `0.002353` |
 | **out=90** | `0.001275` | `0.001270` | `0.001269` | `0.001288` |
 
-### Regresión lineal
+### Linear Regression
 
-| Salida \ Entrada | in=5 | in=10 | in=30 | in=90 |
+| Output \ Input | in=5 | in=10 | in=30 | in=90 |
 |:---:|:---:|:---:|:---:|:---:|
 | **out=1** | `0.012384` | `0.012554` | `0.012924` | `0.014095` |
 | **out=5** | `0.005625` | `0.005698` | `0.005877` | `0.006348` |
@@ -103,22 +103,22 @@ señal disponible es muy suave. Con `input=90` las RNNs logran las mayores mejor
 
 ---
 
-## Δ (LSTM tuneada − LR)
+## Δ (Tuned LSTM − LR)
 
-> Negativo (↓) = LSTM mejora; positivo (↑) = LR gana.
+> Negative (↓) = LSTM wins; positive (↑) = LR wins.
 
-| Salida \ Entrada | in=5 | in=10 | in=30 | in=90 |
+| Output \ Input | in=5 | in=10 | in=30 | in=90 |
 |:---:|:---:|:---:|:---:|:---:|
 | **out=1** | `-0.000146` ↓ | `-0.000320` ↓ | `-0.000680` ↓ | `-0.001839` ↓ |
 | **out=5** | `-0.000039` ↓ | `-0.000116` ↓ | `-0.000293` ↓ | `-0.000754` ↓ |
 | **out=30** | `-0.000015` ↓ | `-0.000024` ↓ | `-0.000096` ↓ | `-0.000285` ↓ |
 | **out=90** | `+0.000004` ↑ | `+0.000003` ↑ | `-0.000075` ↓ | `-0.000219` ↓ |
 
-## Δ (GRU tuneada − LR)
+## Δ (Tuned GRU − LR)
 
-> Negativo (↓) = GRU mejora; positivo (↑) = LR gana.
+> Negative (↓) = GRU wins; positive (↑) = LR wins.
 
-| Salida \ Entrada | in=5 | in=10 | in=30 | in=90 |
+| Output \ Input | in=5 | in=10 | in=30 | in=90 |
 |:---:|:---:|:---:|:---:|:---:|
 | **out=1** | `-0.000140` ↓ | `-0.000307` ↓ | `-0.000684` ↓ | `-0.001833` ↓ |
 | **out=5** | `-0.000032` ↓ | `-0.000114` ↓ | `-0.000280` ↓ | `-0.000727` ↓ |
@@ -127,121 +127,121 @@ señal disponible es muy suave. Con `input=90` las RNNs logran las mayores mejor
 
 ---
 
-## Hiperparámetros del mejor modelo por ventana
+## Best Model Parameter Counts
 
-### in=5, out=1  —  LSTM tuneada  |  test_mae = `0.012238`  |  Δ vs LR = `-0.000146` (-1.18%)
+> Trainable parameters of the best model (lowest test MAE) per window.
+> (L) = LSTM · (G) = GRU
 
-- **Arquitectura:** 2 capas LSTM · 16 unidades/capa · dropout = 0.2
-- **Entrenamiento:** lr = 1e-04 · batch_size = 256
-- **Parámetros totales:** 5,063
+| Output \ Input | in=5 | in=10 | in=30 | in=90 |
+|:---:|:---:|:---:|:---:|:---:|
+| **out=1** | `5063` (L) | `16247` (L) | `18615` (G) | `16247` (L) |
+| **out=5** | `5063` (L) | `16247` (L) | `57047` (L) | `16247` (L) |
+| **out=30** | `5063` (L) | `16247` (L) | `16247` (L) | `7927` (L) |
+| **out=90** | `7927` (L) | `18615` (G) | `67927` (G) | `258711` (G) |
 
-### in=5, out=5  —  LSTM tuneada  |  test_mae = `0.005586`  |  Δ vs LR = `-0.000039` (-0.69%)
+> (L) = LSTM · (G) = GRU
 
-- **Arquitectura:** 2 capas LSTM · 16 unidades/capa · dropout = 0.2
-- **Entrenamiento:** lr = 1e-04 · batch_size = 256
-- **Parámetros totales:** 5,063
+---
 
-### in=5, out=30  —  LSTM tuneada  |  test_mae = `0.002325`  |  Δ vs LR = `-0.000015` (-0.65%)
+## Best Model Hyperparameters Per Window
 
-- **Arquitectura:** 2 capas LSTM · 16 unidades/capa · dropout = 0.2
-- **Entrenamiento:** lr = 1e-04 · batch_size = 128
-- **Parámetros totales:** 5,063
+### in=5, out=1  —  tuned LSTM  |  test_mae = `0.012238`  |  Δ vs LR = `-0.000146` (-1.18%)
 
-### in=5, out=90  —  LSTM tuneada  |  test_mae = `0.001275`  |  Δ vs LR = `+0.000004` (+0.29%)
+- **Architecture:** 2 LSTM layers · 16 units/layer · dropout = 0.2
+- **Training:** lr = 1e-04 · batch_size = 256
 
-- **Arquitectura:** 1 capas LSTM · 32 unidades/capa · dropout = 0.2
-- **Entrenamiento:** lr = 1e-03 · batch_size = 128
-- **Parámetros totales:** 7,927
+### in=5, out=5  —  tuned LSTM  |  test_mae = `0.005586`  |  Δ vs LR = `-0.000039` (-0.69%)
 
-### in=10, out=1  —  LSTM tuneada  |  test_mae = `0.012234`  |  Δ vs LR = `-0.000320` (-2.55%)
+- **Architecture:** 2 LSTM layers · 16 units/layer · dropout = 0.2
+- **Training:** lr = 1e-04 · batch_size = 256
 
-- **Arquitectura:** 2 capas LSTM · 32 unidades/capa · dropout = 0.2
-- **Entrenamiento:** lr = 1e-04 · batch_size = 256
-- **Parámetros totales:** 16,247
+### in=5, out=30  —  tuned LSTM  |  test_mae = `0.002325`  |  Δ vs LR = `-0.000015` (-0.65%)
 
-### in=10, out=5  —  LSTM tuneada  |  test_mae = `0.005582`  |  Δ vs LR = `-0.000116` (-2.03%)
+- **Architecture:** 2 LSTM layers · 16 units/layer · dropout = 0.2
+- **Training:** lr = 1e-04 · batch_size = 128
 
-- **Arquitectura:** 2 capas LSTM · 32 unidades/capa · dropout = 0.2
-- **Entrenamiento:** lr = 1e-04 · batch_size = 128
-- **Parámetros totales:** 16,247
+### in=5, out=90  —  tuned LSTM  |  test_mae = `0.001275`  |  Δ vs LR = `+0.000004` (+0.29%)
 
-### in=10, out=30  —  LSTM tuneada  |  test_mae = `0.002334`  |  Δ vs LR = `-0.000024` (-1.04%)
+- **Architecture:** 1 LSTM layers · 32 units/layer · dropout = 0.2
+- **Training:** lr = 1e-03 · batch_size = 128
 
-- **Arquitectura:** 2 capas LSTM · 32 unidades/capa · dropout = 0.2
-- **Entrenamiento:** lr = 1e-03 · batch_size = 128
-- **Parámetros totales:** 16,247
+### in=10, out=1  —  tuned LSTM  |  test_mae = `0.012234`  |  Δ vs LR = `-0.000320` (-2.55%)
 
-### in=10, out=90  —  GRU tuneada  |  test_mae = `0.001270`  |  Δ vs LR = `-0.000012` (-0.97%)
+- **Architecture:** 2 LSTM layers · 32 units/layer · dropout = 0.2
+- **Training:** lr = 1e-04 · batch_size = 256
 
-- **Arquitectura:** 3 capas GRU · 32 unidades/capa · dropout = 0.2
-- **Entrenamiento:** lr = 1e-04 · batch_size = 128
-- **Parámetros totales:** 18,615
+### in=10, out=5  —  tuned LSTM  |  test_mae = `0.005582`  |  Δ vs LR = `-0.000116` (-2.03%)
 
-### in=30, out=1  —  GRU tuneada  |  test_mae = `0.012240`  |  Δ vs LR = `-0.000684` (-5.29%)
+- **Architecture:** 2 LSTM layers · 32 units/layer · dropout = 0.2
+- **Training:** lr = 1e-04 · batch_size = 128
 
-- **Arquitectura:** 3 capas GRU · 32 unidades/capa · dropout = 0.2
-- **Entrenamiento:** lr = 1e-04 · batch_size = 128
-- **Parámetros totales:** 18,615
+### in=10, out=30  —  tuned LSTM  |  test_mae = `0.002334`  |  Δ vs LR = `-0.000024` (-1.04%)
 
-### in=30, out=5  —  LSTM tuneada  |  test_mae = `0.005584`  |  Δ vs LR = `-0.000293` (-4.98%)
+- **Architecture:** 2 LSTM layers · 32 units/layer · dropout = 0.2
+- **Training:** lr = 1e-03 · batch_size = 128
 
-- **Arquitectura:** 2 capas LSTM · 64 unidades/capa · dropout = 0.2
-- **Entrenamiento:** lr = 1e-04 · batch_size = 256
-- **Parámetros totales:** 57,047
+### in=10, out=90  —  tuned GRU  |  test_mae = `0.001270`  |  Δ vs LR = `-0.000012` (-0.97%)
 
-### in=30, out=30  —  LSTM tuneada  |  test_mae = `0.002340`  |  Δ vs LR = `-0.000096` (-3.95%)
+- **Architecture:** 3 GRU layers · 32 units/layer · dropout = 0.2
+- **Training:** lr = 1e-04 · batch_size = 128
 
-- **Arquitectura:** 2 capas LSTM · 32 unidades/capa · dropout = 0.2
-- **Entrenamiento:** lr = 1e-04 · batch_size = 64
-- **Parámetros totales:** 16,247
+### in=30, out=1  —  tuned GRU  |  test_mae = `0.012240`  |  Δ vs LR = `-0.000684` (-5.29%)
 
-### in=30, out=90  —  GRU tuneada  |  test_mae = `0.001269`  |  Δ vs LR = `-0.000082` (-6.10%)
+- **Architecture:** 3 GRU layers · 32 units/layer · dropout = 0.2
+- **Training:** lr = 1e-04 · batch_size = 128
 
-- **Arquitectura:** 3 capas GRU · 64 unidades/capa · dropout = 0.2
-- **Entrenamiento:** lr = 1e-04 · batch_size = 256
-- **Parámetros totales:** 67,927
+### in=30, out=5  —  tuned LSTM  |  test_mae = `0.005584`  |  Δ vs LR = `-0.000293` (-4.98%)
 
-### in=90, out=1  —  LSTM tuneada  |  test_mae = `0.012256`  |  Δ vs LR = `-0.001839` (-13.05%)
+- **Architecture:** 2 LSTM layers · 64 units/layer · dropout = 0.2
+- **Training:** lr = 1e-04 · batch_size = 256
 
-- **Arquitectura:** 2 capas LSTM · 32 unidades/capa · dropout = 0.2
-- **Entrenamiento:** lr = 1e-04 · batch_size = 256
-- **Parámetros totales:** 16,247
+### in=30, out=30  —  tuned LSTM  |  test_mae = `0.002340`  |  Δ vs LR = `-0.000096` (-3.95%)
 
-### in=90, out=5  —  LSTM tuneada  |  test_mae = `0.005594`  |  Δ vs LR = `-0.000754` (-11.88%)
+- **Architecture:** 2 LSTM layers · 32 units/layer · dropout = 0.2
+- **Training:** lr = 1e-04 · batch_size = 64
 
-- **Arquitectura:** 2 capas LSTM · 32 unidades/capa · dropout = 0.2
-- **Entrenamiento:** lr = 1e-04 · batch_size = 256
-- **Parámetros totales:** 16,247
+### in=30, out=90  —  tuned GRU  |  test_mae = `0.001269`  |  Δ vs LR = `-0.000082` (-6.10%)
 
-### in=90, out=30  —  LSTM tuneada  |  test_mae = `0.002343`  |  Δ vs LR = `-0.000285` (-10.85%)
+- **Architecture:** 3 GRU layers · 64 units/layer · dropout = 0.2
+- **Training:** lr = 1e-04 · batch_size = 256
 
-- **Arquitectura:** 1 capas LSTM · 32 unidades/capa · dropout = 0.2
-- **Entrenamiento:** lr = 1e-04 · batch_size = 256
-- **Parámetros totales:** 7,927
+### in=90, out=1  —  tuned LSTM  |  test_mae = `0.012256`  |  Δ vs LR = `-0.001839` (-13.05%)
 
-### in=90, out=90  —  GRU tuneada  |  test_mae = `0.001288`  |  Δ vs LR = `-0.000230` (-15.16%)
+- **Architecture:** 2 LSTM layers · 32 units/layer · dropout = 0.2
+- **Training:** lr = 1e-04 · batch_size = 256
 
-- **Arquitectura:** 3 capas GRU · 128 unidades/capa · dropout = 0.2
-- **Entrenamiento:** lr = 1e-04 · batch_size = 64
-- **Parámetros totales:** 258,711
+### in=90, out=5  —  tuned LSTM  |  test_mae = `0.005594`  |  Δ vs LR = `-0.000754` (-11.88%)
+
+- **Architecture:** 2 LSTM layers · 32 units/layer · dropout = 0.2
+- **Training:** lr = 1e-04 · batch_size = 256
+
+### in=90, out=30  —  tuned LSTM  |  test_mae = `0.002343`  |  Δ vs LR = `-0.000285` (-10.85%)
+
+- **Architecture:** 1 LSTM layers · 32 units/layer · dropout = 0.2
+- **Training:** lr = 1e-04 · batch_size = 256
+
+### in=90, out=90  —  tuned GRU  |  test_mae = `0.001288`  |  Δ vs LR = `-0.000230` (-15.16%)
+
+- **Architecture:** 3 GRU layers · 128 units/layer · dropout = 0.2
+- **Training:** lr = 1e-04 · batch_size = 64
 
 
 ---
 
-## Interpretación
+## Interpretation
 
-- **GRU vs LSTM**: la diferencia de test MAE entre ambas es mínima en prácticamente todas las
-  ventanas (< 0.0001). La GRU tiene ligeramente menos parámetros para igual número de unidades
-  (3 puertas vs 4), lo que la hace marginalmente preferible cuando los recursos son limitados.
-- **Tendencia por ventana de entrada**: la ventaja de las RNNs frente a LR crece de forma
-  consistente con `input_window`. Con `input=90` la mejora llega al −12 % − −14 %, mientras
-  que con `input=5` suele ser < −1 %. Las RNNs explotan mejor el contexto temporal largo.
-- **Ventanas con output largo (`output=90`)**: la variable objetivo es la media de retornos
-  de 90 días, que tiene varianza muy baja. Las RNNs mejoran igual o más que en salidas cortas
-  cuando `input` también es largo; con `input` corto la señal es insuficiente.
-- **Arquitectura ganadora**: la mayoría de ventanas se resuelven bien con 2 capas y pocas
-  unidades (32–64). Solo algunas ventanas con mucho contexto (`input=90`) requieren
-  configuraciones más grandes (128–256 unidades o 3 capas).
-- **HP search**: el ajuste fino mejora ≈ 0.3–2 % sobre la LSTM/GRU base sin ajuste, lo que
-  confirma que la arquitectura base ya captura la mayor parte de la señal disponible en datos
-  financieros de baja relación señal/ruido.
+- **GRU vs LSTM**: the test MAE difference between both is minimal across almost all windows
+  (< 0.0001). GRU has slightly fewer parameters for the same number of units (3 gates vs 4),
+  making it marginally preferable when resources are constrained.
+- **Input window trend**: the RNN advantage over LR grows consistently with `input_window`.
+  With `input=90` the improvement reaches −12 % − −14 %, while with `input=5` it is usually
+  < −1 %. RNNs exploit long temporal context better than the linear model.
+- **Long output windows (`output=90`)**: the target variable is the 90-day mean return, which
+  has very low variance. RNNs improve as much or more than for short outputs when `input` is
+  also long; with short `input` the signal is insufficient.
+- **Winning architecture**: most windows are solved well with 2 layers and few units (32–64).
+  Only a few windows with large context (`input=90`) require larger configurations
+  (128–256 units or 3 layers).
+- **HP search**: fine-tuning improves ≈ 0.3–2 % over the baseline LSTM/GRU without tuning,
+  confirming that the base architecture already captures most of the available signal in
+  low signal-to-noise financial data.

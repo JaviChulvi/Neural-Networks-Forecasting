@@ -1,13 +1,13 @@
 """
-Genera rnn_vs_lr_report.md comparando LSTM tuneada y GRU tuneada contra la regresión lineal.
+Generates rnn_vs_lr_report.md comparing tuned LSTM and tuned GRU against linear regression.
 
-Fuentes de datos:
-  - LSTM tuneada : model/rnn/lstm/rnn-lstm-input*-output*.ipynb (outputs de celdas)
-                   + model/mlruns/ para la ventana (in=30, out=5) que no tiene notebook propio
-  - GRU tuneada  : model/rnn/gru/hp_search_input*_output*.ipynb (outputs de celdas)
-  - LR benchmark : data/lr_benchmark.csv
+Data sources:
+  - Tuned LSTM : model/rnn/lstm/rnn-lstm-input*-output*.ipynb (cell outputs)
+                 + model/mlruns/ for the (in=30, out=5) window which has no dedicated notebook
+  - Tuned GRU  : model/rnn/gru/hp_search_input*_output*.ipynb (cell outputs)
+  - LR benchmark: data/lr_benchmark.csv
 
-Uso:
+Usage:
     python generate_rnn_vs_lr_report.py
 """
 
@@ -34,13 +34,13 @@ OUT_MD       = SCRIPT_DIR / "rnn_vs_lr_report.md"
 
 INPUT_WINDOWS  = [5, 10, 30, 90]
 OUTPUT_WINDOWS = [1, 5, 30, 90]
-N_FEATURES     = 23  # retornos por ticker
+N_FEATURES     = 23  # returns per ticker
 
 
-# ── Utilidades de parseo de notebooks ─────────────────────────────────────────
+# ── Notebook parsing utilities ─────────────────────────────────────────────────
 
 def cell_outputs_text(nb: dict) -> list[tuple[str, str]]:
-    """Devuelve lista de (source, output_text) para celdas de código con salida."""
+    """Returns list of (source, output_text) for code cells that have output."""
     result = []
     for c in nb["cells"]:
         if c["cell_type"] != "code":
@@ -58,7 +58,7 @@ def cell_outputs_text(nb: dict) -> list[tuple[str, str]]:
 
 
 def parse_winning_config(nb: dict, layer_key: str) -> dict:
-    """Extrae la configuración ganadora del output 'Configuración ganadora:'."""
+    """Extracts the winning configuration from the 'Configuración ganadora:' output."""
     for src, text in cell_outputs_text(nb):
         if "Configuración ganadora" not in text:
             continue
@@ -82,7 +82,7 @@ def parse_winning_config(nb: dict, layer_key: str) -> dict:
 
 
 def parse_summary_mae(nb: dict, model_label: str) -> tuple[float | None, float | None]:
-    """Extrae (MAE_train, MAE_test) para el modelo tuneado del output del summary."""
+    """Extracts (MAE_train, MAE_test) for the tuned model from the summary output."""
     for src, text in cell_outputs_text(nb):
         if model_label not in text:
             continue
@@ -95,7 +95,7 @@ def parse_summary_mae(nb: dict, model_label: str) -> tuple[float | None, float |
 
 
 def compute_n_params_lstm(layers: int, units: int, n_in: int, n_out: int) -> int:
-    """Params totales de LSTM apilada + Dense de salida (fórmula Keras estándar)."""
+    """Total params for stacked LSTM + output Dense (standard Keras formula)."""
     n = 0
     inp = n_in
     for _ in range(layers):
@@ -106,7 +106,7 @@ def compute_n_params_lstm(layers: int, units: int, n_in: int, n_out: int) -> int
 
 
 def compute_n_params_gru(layers: int, units: int, n_in: int, n_out: int) -> int:
-    """Params totales de GRU apilada + Dense de salida (fórmula Keras estándar)."""
+    """Total params for stacked GRU + output Dense (standard Keras formula)."""
     n = 0
     inp = n_in
     for _ in range(layers):
@@ -116,7 +116,7 @@ def compute_n_params_gru(layers: int, units: int, n_in: int, n_out: int) -> int:
     return n
 
 
-# ── Carga de resultados LSTM ───────────────────────────────────────────────────
+# ── Load LSTM results ─────────────────────────────────────────────────────────
 
 lstm_rows = []
 
@@ -131,7 +131,7 @@ for nb_path in sorted(LSTM_NB_DIR.glob("rnn-lstm-input*-output*.ipynb")):
     mae_train, mae_test = parse_summary_mae(nb, "LSTM tuneada")
 
     if not cfg or mae_test is None:
-        print(f"[LSTM] Faltan datos en {nb_path.name}", file=sys.stderr)
+        print(f"[LSTM] Missing data in {nb_path.name}", file=sys.stderr)
         continue
 
     n_params = compute_n_params_lstm(cfg["layers"], cfg["units"], N_FEATURES, N_FEATURES)
@@ -150,20 +150,31 @@ for nb_path in sorted(LSTM_NB_DIR.glob("rnn-lstm-input*-output*.ipynb")):
         "MAE_test":      mae_test,
     })
 
-# Ventana (30, 5) no tiene notebook propio: usar el mejor run del HP search en mlruns
+# Window (30, 5) has no dedicated notebook: use the best HP search run from mlruns
 LSTM_30_5_IN_NOTEBOOKS = any(
     r["input_window"] == 30 and r["output_window"] == 5 for r in lstm_rows
 )
 if not LSTM_30_5_IN_NOTEBOOKS:
     mlflow.set_tracking_uri(str(MLRUNS_URI))
     client = mlflow.tracking.MlflowClient()
-    exps = [e for e in client.search_experiments()
-            if e.name == "Red_Neuronal_Recurrente_LSTM"]
-    if exps:
+    # search_experiments() crashes on directories missing meta.yaml;
+    # scan manually and skip corrupt entries.
+    target_exp_id = None
+    for exp_dir in sorted(MLRUNS_URI.iterdir()):
+        if not (exp_dir / "meta.yaml").exists():
+            continue
+        try:
+            exp = client.get_experiment(exp_dir.name)
+            if exp and exp.name == "Red_Neuronal_Recurrente_LSTM":
+                target_exp_id = exp.experiment_id
+                break
+        except Exception:
+            continue
+    if target_exp_id:
         runs = client.search_runs(
-            experiment_ids=[exps[0].experiment_id], max_results=2000
+            experiment_ids=[target_exp_id], max_results=2000
         )
-        # Mejor run del train-grid para (30,5): lr1e-04_batch256
+        # Best train-grid run for (30,5): lr1e-04_batch256
         for r in runs:
             name = r.data.tags.get("mlflow.runName", "")
             if "tuned_input30_output5" in name:
@@ -189,7 +200,7 @@ if not LSTM_30_5_IN_NOTEBOOKS:
 
 lstm_df = pd.DataFrame(lstm_rows).sort_values(["input_window", "output_window"]).reset_index(drop=True)
 
-# ── Carga de resultados GRU ────────────────────────────────────────────────────
+# ── Load GRU results ──────────────────────────────────────────────────────────
 
 gru_rows = []
 
@@ -204,7 +215,7 @@ for nb_path in sorted(GRU_NB_DIR.glob("hp_search_input*_output*.ipynb")):
     mae_train, mae_test = parse_summary_mae(nb, "GRU tuneada")
 
     if not cfg or mae_test is None:
-        print(f"[GRU] Faltan datos en {nb_path.name}", file=sys.stderr)
+        print(f"[GRU] Missing data in {nb_path.name}", file=sys.stderr)
         continue
 
     n_params = compute_n_params_gru(cfg["layers"], cfg["units"], N_FEATURES, N_FEATURES)
@@ -227,10 +238,11 @@ gru_df = pd.DataFrame(gru_rows).sort_values(["input_window", "output_window"]).r
 
 # ── LR benchmark ──────────────────────────────────────────────────────────────
 
+
 lr_df = pd.read_csv(LR_BENCH_CSV)
 lr_map = lr_df.set_index(["input_window", "output_window"])["MAE_test"].to_dict()
 
-# ── Merge y deltas ─────────────────────────────────────────────────────────────
+# ── Merge and deltas ──────────────────────────────────────────────────────────
 
 all_df = pd.concat([lstm_df, gru_df], ignore_index=True)
 all_df["MAE_test_lr"] = all_df.apply(
@@ -239,18 +251,18 @@ all_df["MAE_test_lr"] = all_df.apply(
 all_df["delta"]     = all_df["MAE_test"] - all_df["MAE_test_lr"]
 all_df["pct_delta"] = 100 * all_df["delta"] / all_df["MAE_test_lr"]
 
-# Para cada ventana, mejor modelo (menor MAE_test)
+# Best model per window (lowest MAE_test)
 idx_best = all_df.groupby(["input_window", "output_window"])["MAE_test"].idxmin()
 best_df  = all_df.loc[idx_best].copy()
 
 
-# ── Helpers de tablas markdown ─────────────────────────────────────────────────
+# ── Markdown table helpers ────────────────────────────────────────────────────
 
 def pivot_model_md(df: pd.DataFrame, value_col: str, fmt: str = ".6f") -> str:
     piv  = df.pivot(index="output_window", columns="input_window", values=value_col)
     iws  = sorted(piv.columns.tolist())
     ows  = sorted(piv.index.tolist())
-    hdr  = "| Salida \\ Entrada |" + "".join(f" in={iw} |" for iw in iws)
+    hdr  = "| Output \\ Input |" + "".join(f" in={iw} |" for iw in iws)
     sep  = "|" + ":---:|" * (len(iws) + 1)
     rows = [hdr, sep]
     for ow in ows:
@@ -286,7 +298,7 @@ def delta_md(df: pd.DataFrame) -> str:
     piv  = df.pivot(index="output_window", columns="input_window", values="delta")
     iws  = sorted(piv.columns.tolist())
     ows  = sorted(piv.index.tolist())
-    hdr  = "| Salida \\ Entrada |" + "".join(f" in={iw} |" for iw in iws)
+    hdr  = "| Output \\ Input |" + "".join(f" in={iw} |" for iw in iws)
     sep  = "|" + ":---:|" * (len(iws) + 1)
     rows = [hdr, sep]
     for ow in ows:
@@ -299,26 +311,46 @@ def delta_md(df: pd.DataFrame) -> str:
     return "\n".join(rows)
 
 
+def params_matrix_md(df: pd.DataFrame) -> str:
+    """Matrix output_window × input_window with n_params of the best model (L/G)."""
+    piv_params = df.pivot(index="output_window", columns="input_window", values="n_params")
+    piv_model  = df.pivot(index="output_window", columns="input_window", values="model_type")
+    iws  = sorted(piv_params.columns.tolist())
+    ows  = sorted(piv_params.index.tolist())
+    hdr  = "| Output \\ Input |" + "".join(f" in={iw} |" for iw in iws)
+    sep  = "|" + ":---:|" * (len(iws) + 1)
+    rows = [hdr, sep]
+    for ow in ows:
+        cells = [f"**out={ow}**"]
+        for iw in iws:
+            n     = int(piv_params.loc[ow, iw])  # type: ignore[arg-type]
+            tag   = "L" if piv_model.loc[ow, iw] == "LSTM" else "G"
+            cells.append(f"`{n}` ({tag})")
+        rows.append("| " + " | ".join(cells) + " |")
+    rows.append("")
+    rows.append("> (L) = LSTM · (G) = GRU")
+    return "\n".join(rows)
+
+
 def hp_detail_md(df: pd.DataFrame) -> str:
     lines = []
     for _, row in df.iterrows():
-        iw, ow    = int(row.input_window), int(row.output_window)
-        arch_label = "capas LSTM" if row.model_type == "LSTM" else "capas GRU"
+        iw, ow     = int(row.input_window), int(row.output_window)
+        arch_label = "LSTM layers" if row.model_type == "LSTM" else "GRU layers"
         lines += [
-            f"### in={iw}, out={ow}  —  {row.model_type} tuneada  |  "
+            f"### in={iw}, out={ow}  —  tuned {row.model_type}  |  "
             f"test_mae = `{row.MAE_test:.6f}`  |  Δ vs LR = `{row.delta:+.6f}` ({row.pct_delta:+.2f}%)",
             "",
-            f"- **Arquitectura:** {int(row.layers)} {arch_label} · "
-            f"{int(row.units)} unidades/capa · dropout = {row.dropout:.1f}",
-            f"- **Entrenamiento:** lr = {row.learning_rate:.0e} · "
+            f"- **Architecture:** {int(row.layers)} {arch_label} · "
+            f"{int(row.units)} units/layer · dropout = {row.dropout:.1f}",
+            f"- **Training:** lr = {row.learning_rate:.0e} · "
             f"batch_size = {int(row.batch_size)}",
-            f"- **Parámetros totales:** {int(row.n_params):,}",
             "",
         ]
     return "\n".join(lines)
 
 
-# ── Estadísticas de ranking ────────────────────────────────────────────────────
+# ── Ranking statistics ────────────────────────────────────────────────────────
 
 def model_stats(df: pd.DataFrame, model: str, lr_map: dict) -> dict:
     sub = df[df.model_type == model].copy()
@@ -361,12 +393,12 @@ def ranking_md(stats_df: pd.DataFrame) -> str:
             f"| {r.mean_delta_lr:+.6f} "
             f"| {int(r.wins_vs_lr)} "
             f"| {int(r.wins_best_rnn)} "
-            f"| {int(r.mean_params):,} |"
+            f"| {int(r.mean_params)} |"
         )
     return "\n".join(rows)
 
 
-# ── Tabla per-ventana del mejor modelo ────────────────────────────────────────
+# ── Per-window best model table ───────────────────────────────────────────────
 
 def per_window_best_md(best_df: pd.DataFrame) -> str:
     cols = ["input_window", "output_window", "model_type",
@@ -384,7 +416,7 @@ def per_window_best_md(best_df: pd.DataFrame) -> str:
     return "\n".join(rows)
 
 
-# ── Construcción del markdown ──────────────────────────────────────────────────
+# ── Build markdown ────────────────────────────────────────────────────────────
 
 gru_wins  = int((gru_df.merge(lr_df[["input_window","output_window","MAE_test"]].rename(
     columns={"MAE_test":"lr_test"}), on=["input_window","output_window"])
@@ -394,110 +426,119 @@ lstm_wins = int((lstm_df.merge(lr_df[["input_window","output_window","MAE_test"]
     .eval("delta = MAE_test - lr_test")["delta"] < 0).sum())
 
 md = f"""\
-# RNN vs Regresión Lineal — Informe de Resultados
+# RNN vs Linear Regression — Results Report
 
-Generado a partir de los notebooks `rnn/lstm/` y `rnn/gru/` y de `data/lr_benchmark.csv`.
+Generated from notebooks `rnn/lstm/` and `rnn/gru/` and from `data/lr_benchmark.csv`.
 
-Incluye dos arquitecturas recurrentes:
-- **LSTM** — 2 etapas de HP search por ventana (`lstm_layers × units × dropout`, luego `lr × batch_size`)
-- **GRU**  — misma metodología, con `gru_layers ∈ {{1, 2, 3}}` y `units ∈ {{32, 64, 128, 256}}`
-
----
-
-## Conclusión principal
-
-- MAE test medio **LSTM tuneada** : `{stats_df[stats_df.model=="LSTM"].iloc[0].mean_test:.6f}`
-- MAE test medio **GRU tuneada**  : `{stats_df[stats_df.model=="GRU"].iloc[0].mean_test:.6f}`
-- MAE test medio **regresión lineal** : `{lr_mean:.6f}`
-- Mejor arquitectura RNN global  : **{best_model_name}** (mean test MAE = `{best_mean:.6f}`)
-- Ventanas donde LSTM tuneada mejora a LR : **{lstm_wins} / 16**
-- Ventanas donde GRU tuneada mejora a LR  : **{gru_wins} / 16**
-
-Ambas arquitecturas superan a la regresión lineal en la gran mayoría de ventanas. La ventaja es
-pequeña con ventanas de entrada cortas (`input=5/10`) y salidas largas (`output=90`), donde la
-señal disponible es muy suave. Con `input=90` las RNNs logran las mayores mejoras relativas
-(hasta ~−14 % en test MAE), ya que aprovechan la historia larga mejor que el modelo lineal.
+Two recurrent architectures are included:
+- **LSTM** — 2-stage HP search per window (`lstm_layers × units × dropout`, then `lr × batch_size`)
+- **GRU**  — same methodology, with `gru_layers ∈ {{1, 2, 3}}` and `units ∈ {{32, 64, 128, 256}}`
 
 ---
 
-## Ranking de modelos
+## Main Conclusion
 
-> `wins_vs_lr` = ventanas donde el modelo supera a LR
-> `wins_best_rnn` = ventanas donde este modelo es el mejor RNN de los dos
+- Mean test MAE **tuned LSTM** : `{stats_df[stats_df.model=="LSTM"].iloc[0].mean_test:.6f}`
+- Mean test MAE **tuned GRU**  : `{stats_df[stats_df.model=="GRU"].iloc[0].mean_test:.6f}`
+- Mean test MAE **linear regression** : `{lr_mean:.6f}`
+- Best global RNN architecture : **{best_model_name}** (mean test MAE = `{best_mean:.6f}`)
+- Windows where tuned LSTM beats LR : **{lstm_wins} / 16**
+- Windows where tuned GRU beats LR  : **{gru_wins} / 16**
+
+Both architectures outperform linear regression in the vast majority of windows. The advantage is
+small for short input windows (`input=5/10`) and long outputs (`output=90`), where the available
+signal is very weak. With `input=90` the RNNs achieve the largest relative improvements
+(up to ~−14 % in test MAE), exploiting the long history better than the linear model.
+
+---
+
+## Model Ranking
+
+> `wins_vs_lr` = windows where the model beats LR
+> `wins_best_rnn` = windows where this model is the better of the two RNNs
 
 {ranking_md(stats_df)}
 
 ---
 
-## Mejor RNN por ventana
+## Best RNN Per Window
 
 {best_model_md(best_df)}
 
 ---
 
-## Mejor RNN per ventana — detalle
+## Best RNN Per Window — Detail
 
 {per_window_best_md(best_df)}
 
 ---
 
-## Matrices de MAE test
+## Test MAE Matrices
 
-### LSTM tuneada
+### Tuned LSTM
 
 {pivot_model_md(lstm_df, "MAE_test")}
 
-### GRU tuneada
+### Tuned GRU
 
 {pivot_model_md(gru_df, "MAE_test")}
 
-### Regresión lineal
+### Linear Regression
 
 {pivot_model_md(lr_df, "MAE_test")}
 
 ---
 
-## Δ (LSTM tuneada − LR)
+## Δ (Tuned LSTM − LR)
 
-> Negativo (↓) = LSTM mejora; positivo (↑) = LR gana.
+> Negative (↓) = LSTM wins; positive (↑) = LR wins.
 
 {delta_md(lstm_df.assign(MAE_test_lr=lstm_df.apply(lambda r: lr_map[(r.input_window, r.output_window)], axis=1)).assign(delta=lambda d: d.MAE_test - d.MAE_test_lr))}
 
-## Δ (GRU tuneada − LR)
+## Δ (Tuned GRU − LR)
 
-> Negativo (↓) = GRU mejora; positivo (↑) = LR gana.
+> Negative (↓) = GRU wins; positive (↑) = LR wins.
 
 {delta_md(gru_df.assign(MAE_test_lr=gru_df.apply(lambda r: lr_map[(r.input_window, r.output_window)], axis=1)).assign(delta=lambda d: d.MAE_test - d.MAE_test_lr))}
 
 ---
 
-## Hiperparámetros del mejor modelo por ventana
+## Best Model Parameter Counts
+
+> Trainable parameters of the best model (lowest test MAE) per window.
+> (L) = LSTM · (G) = GRU
+
+{params_matrix_md(best_df)}
+
+---
+
+## Best Model Hyperparameters Per Window
 
 {hp_detail_md(best_df.sort_values(["input_window","output_window"]))}
 
 ---
 
-## Interpretación
+## Interpretation
 
-- **GRU vs LSTM**: la diferencia de test MAE entre ambas es mínima en prácticamente todas las
-  ventanas (< 0.0001). La GRU tiene ligeramente menos parámetros para igual número de unidades
-  (3 puertas vs 4), lo que la hace marginalmente preferible cuando los recursos son limitados.
-- **Tendencia por ventana de entrada**: la ventaja de las RNNs frente a LR crece de forma
-  consistente con `input_window`. Con `input=90` la mejora llega al −12 % − −14 %, mientras
-  que con `input=5` suele ser < −1 %. Las RNNs explotan mejor el contexto temporal largo.
-- **Ventanas con output largo (`output=90`)**: la variable objetivo es la media de retornos
-  de 90 días, que tiene varianza muy baja. Las RNNs mejoran igual o más que en salidas cortas
-  cuando `input` también es largo; con `input` corto la señal es insuficiente.
-- **Arquitectura ganadora**: la mayoría de ventanas se resuelven bien con 2 capas y pocas
-  unidades (32–64). Solo algunas ventanas con mucho contexto (`input=90`) requieren
-  configuraciones más grandes (128–256 unidades o 3 capas).
-- **HP search**: el ajuste fino mejora ≈ 0.3–2 % sobre la LSTM/GRU base sin ajuste, lo que
-  confirma que la arquitectura base ya captura la mayor parte de la señal disponible en datos
-  financieros de baja relación señal/ruido.
+- **GRU vs LSTM**: the test MAE difference between both is minimal across almost all windows
+  (< 0.0001). GRU has slightly fewer parameters for the same number of units (3 gates vs 4),
+  making it marginally preferable when resources are constrained.
+- **Input window trend**: the RNN advantage over LR grows consistently with `input_window`.
+  With `input=90` the improvement reaches −12 % − −14 %, while with `input=5` it is usually
+  < −1 %. RNNs exploit long temporal context better than the linear model.
+- **Long output windows (`output=90`)**: the target variable is the 90-day mean return, which
+  has very low variance. RNNs improve as much or more than for short outputs when `input` is
+  also long; with short `input` the signal is insufficient.
+- **Winning architecture**: most windows are solved well with 2 layers and few units (32–64).
+  Only a few windows with large context (`input=90`) require larger configurations
+  (128–256 units or 3 layers).
+- **HP search**: fine-tuning improves ≈ 0.3–2 % over the baseline LSTM/GRU without tuning,
+  confirming that the base architecture already captures most of the available signal in
+  low signal-to-noise financial data.
 """
 
 OUT_MD.write_text(md, encoding="utf-8")
-print(f"Informe generado: {OUT_MD}")
-print(f"  LSTM tuneada: {len(lstm_df)} ventanas | wins vs LR: {lstm_wins}/16")
-print(f"  GRU  tuneada: {len(gru_df)} ventanas | wins vs LR: {gru_wins}/16")
-print(f"  Mejor modelo global: {best_model_name} (mean MAE test = {best_mean:.6f})")
+print(f"Report generated: {OUT_MD}")
+print(f"  Tuned LSTM: {len(lstm_df)} windows | wins vs LR: {lstm_wins}/16")
+print(f"  Tuned GRU:  {len(gru_df)} windows | wins vs LR: {gru_wins}/16")
+print(f"  Best global model: {best_model_name} (mean test MAE = {best_mean:.6f})")
