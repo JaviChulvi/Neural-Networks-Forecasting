@@ -245,10 +245,3 @@ señal disponible es muy suave. Con `input=90` las RNNs logran las mayores mejor
 - **HP search**: el ajuste fino mejora ≈ 0.3–2 % sobre la LSTM/GRU base sin ajuste, lo que
   confirma que la arquitectura base ya captura la mayor parte de la señal disponible en datos
   financieros de baja relación señal/ruido.
-
-## Próximos pasos
-
-- Crear el notebook `rnn/lstm/rnn-lstm-input30-output5.ipynb` para tener los resultados LSTM
-  tuneados de esa ventana en el mismo formato que el resto.
-- Registrar todos los runs de GRU y LSTM en `mlflow.db` para poder cruzarlos con MLflow UI.
-- Comparar las mejores RNNs contra el MLP tuneado y el modelo mixto (CNN+RNN).
