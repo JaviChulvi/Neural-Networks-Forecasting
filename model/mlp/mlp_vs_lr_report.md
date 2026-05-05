@@ -1,4 +1,4 @@
-# MLP vs Linear Regression Report
+rnn# MLP vs Linear Regression Report
 
 Generated from the current fixed MLP CSV files in `data/mlp/`.
 
