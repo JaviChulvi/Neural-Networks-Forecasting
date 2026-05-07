@@ -1,3 +1,0 @@
-model/CNN/01_CNN_Deep_Conv1D.ipynb
-model/CNN/02_CNN_Hyperparameter_Search.ipynb
-model/CNN/README.md
