@@ -13,7 +13,7 @@ The implemented architectures combine convolutional and recurrent layers:
 - `CNN_GRU`
 - `CNN_BiGRU`
 
-The main notebook logs all runs in MLflow and exports CSV summaries under `data/hybrid/`.
+The main notebook logs all runs in MLflow and exports CSV summaries under `data/mixtos/cnn_rnn_hybrid/`.
 
 ## Files
 
@@ -24,12 +24,12 @@ The main notebook logs all runs in MLflow and exports CSV summaries under `data/
 
 Generated outputs are written to:
 
-- `data/hybrid/hybrid_all_results.csv`
-- `data/hybrid/hybrid_best_by_window.csv`
-- `data/hybrid/hybrid_comparison_vs_lr.csv`
-- `data/hybrid/hybrid_test_mae_matrix.csv`
-- `data/hybrid/history/`
-- `data/hybrid/plots/`
+- `data/mixtos/cnn_rnn_hybrid/hybrid_all_results.csv`
+- `data/mixtos/cnn_rnn_hybrid/hybrid_best_by_window.csv`
+- `data/mixtos/cnn_rnn_hybrid/hybrid_comparison_vs_lr.csv`
+- `data/mixtos/cnn_rnn_hybrid/hybrid_test_mae_matrix.csv`
+- `data/mixtos/cnn_rnn_hybrid/history/`
+- `data/mixtos/cnn_rnn_hybrid/plots/`
 
 MLflow experiment name:
 
