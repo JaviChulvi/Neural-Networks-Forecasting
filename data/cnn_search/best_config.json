@@ -1,0 +1,18 @@
+{
+  "filters_1": 96,
+  "filters_2": 32,
+  "filters_3": 64,
+  "kernel_1": 5,
+  "kernel_2": 3,
+  "kernel_3": 3,
+  "dilation_2": 1,
+  "dilation_3": 2,
+  "spatial_dropout": 0.05,
+  "dense_1": 256,
+  "dense_2": 64,
+  "dropout_1": 0.1,
+  "dropout_2": 0.05,
+  "learning_rate": 0.001,
+  "batch_size": 64,
+  "trial_id": 1
+}
