@@ -1,0 +1,2 @@
+model,input_window,output_window,MAE_train,MAE_val,MAE_test,params,epochs_trained,batch_size,learning_rate,history_path,plot_path
+CNN_Deep_Conv1D,30,90,0.0012631034810951238,0.0009273015412648411,0.0012625997291777161,93399,37,128,0.0003,data/cnn/history/cnn_input30_output90_history.csv,data/cnn/plots/cnn_input30_output90_loss_curve.png

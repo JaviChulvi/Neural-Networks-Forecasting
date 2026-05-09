@@ -1,0 +1,17 @@
+model,input_window,output_window,MAE_train,MAE_val,MAE_test,params,epochs_trained,batch_size,learning_rate,history_path,plot_path
+CNN_Deep_Conv1D,5,1,0.011834775429349,0.0090391946835984,0.0122369584111652,93399,28,128,0.0003,data/cnn/history/cnn_input5_output1_history.csv,data/cnn/plots/cnn_input5_output1_loss_curve.png
+CNN_Deep_Conv1D,5,5,0.0054727637883737,0.0041541909465946,0.0055824013734633,93399,36,128,0.0003,data/cnn/history/cnn_input5_output5_history.csv,data/cnn/plots/cnn_input5_output5_loss_curve.png
+CNN_Deep_Conv1D,5,30,0.002204044817431,0.0016983388340748,0.0023218555549385,93399,29,128,0.0003,data/cnn/history/cnn_input5_output30_history.csv,data/cnn/plots/cnn_input5_output30_loss_curve.png
+CNN_Deep_Conv1D,5,90,0.0012653754217693,0.0009279205517676,0.0012621970003962,93399,51,128,0.0003,data/cnn/history/cnn_input5_output90_history.csv,data/cnn/plots/cnn_input5_output90_loss_curve.png
+CNN_Deep_Conv1D,10,1,0.0118288373857585,0.009042053730647,0.0122385385092541,93399,35,128,0.0003,data/cnn/history/cnn_input10_output1_history.csv,data/cnn/plots/cnn_input10_output1_loss_curve.png
+CNN_Deep_Conv1D,10,5,0.0054741308450177,0.0041475726014286,0.0055746604538359,93399,35,128,0.0003,data/cnn/history/cnn_input10_output5_history.csv,data/cnn/plots/cnn_input10_output5_loss_curve.png
+CNN_Deep_Conv1D,10,30,0.0022020664995866,0.001699367943829,0.0023209248946767,93399,42,128,0.0003,data/cnn/history/cnn_input10_output30_history.csv,data/cnn/plots/cnn_input10_output30_loss_curve.png
+CNN_Deep_Conv1D,10,90,0.0012671746360161,0.0009228644334951,0.0012593601302531,93399,21,128,0.0003,data/cnn/history/cnn_input10_output90_history.csv,data/cnn/plots/cnn_input10_output90_loss_curve.png
+CNN_Deep_Conv1D,30,1,0.0118388956185165,0.0090382382339706,0.0122433833968117,93399,21,128,0.0003,data/cnn/history/cnn_input30_output1_history.csv,data/cnn/plots/cnn_input30_output1_loss_curve.png
+CNN_Deep_Conv1D,30,5,0.0054765523347907,0.0041525583711186,0.0055767004218999,93399,22,128,0.0003,data/cnn/history/cnn_input30_output5_history.csv,data/cnn/plots/cnn_input30_output5_loss_curve.png
+CNN_Deep_Conv1D,30,30,0.0022052583532709,0.001698488582533,0.0023192259698697,93399,22,128,0.0003,data/cnn/history/cnn_input30_output30_history.csv,data/cnn/plots/cnn_input30_output30_loss_curve.png
+CNN_Deep_Conv1D,30,90,0.0012631034810951,0.0009273015412648,0.0012625997291777,93399,37,128,0.0003,data/cnn/history/cnn_input30_output90_history.csv,data/cnn/plots/cnn_input30_output90_loss_curve.png
+CNN_Deep_Conv1D,90,1,0.0118437221376156,0.0090467374400032,0.0122595152899121,93399,20,128,0.0003,data/cnn/history/cnn_input90_output1_history.csv,data/cnn/plots/cnn_input90_output1_loss_curve.png
+CNN_Deep_Conv1D,90,5,0.0054790890838869,0.0041443773075863,0.0055862695028753,93399,33,128,0.0003,data/cnn/history/cnn_input90_output5_history.csv,data/cnn/plots/cnn_input90_output5_loss_curve.png
+CNN_Deep_Conv1D,90,30,0.0021970458657629,0.0017036612807473,0.0023225277484505,93399,28,128,0.0003,data/cnn/history/cnn_input90_output30_history.csv,data/cnn/plots/cnn_input90_output30_loss_curve.png
+CNN_Deep_Conv1D,90,90,0.0012556018398448,0.0009267588326164,0.0012638157621202,93399,35,128,0.0003,data/cnn/history/cnn_input90_output90_history.csv,data/cnn/plots/cnn_input90_output90_loss_curve.png
