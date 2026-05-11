@@ -42,6 +42,9 @@ La carga y generacion de ventanas se centraliza en `util.py`.
 │   │   ├── lstm/                 # Notebooks hp_search por combinacion de ventanas (LSTM)
 │   │   └── gru/                  # Notebooks hp_search por combinacion de ventanas (GRU)
 │   └── mixtos/                   # Modelos hibridos (Conv1D + LSTM, Conv1D + GRU, etc.)
+├── backtesting/                  # Comparativa de estrategias de inversion
+│   ├── notebooks/                # Analisis exploratorios y comparativas
+│   └── scripts/                  # Implementaciones reutilizables de cada estrategia
 ├── Lectura_datos.ipynb           # Lectura, limpieza y guardado de datos
 ├── util.py                       # Funciones comunes de datos, benchmarks y graficas
 ├── best_model_per_window.py      # Selecciona el mejor modelo por ventana entre las 4 familias y genera el reporte
