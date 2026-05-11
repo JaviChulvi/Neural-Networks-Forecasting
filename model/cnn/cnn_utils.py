@@ -51,8 +51,9 @@ DATA_OUT = PROJECT_ROOT / "data" / "cnn"
 RESULTS_DIR = DATA_OUT / "window_results"
 HISTORY_DIR = DATA_OUT / "history"
 PLOTS_DIR = DATA_OUT / "plots"
+MODELS_DIR = DATA_OUT / "saved_models"
 
-for p in [DATA_OUT, RESULTS_DIR, HISTORY_DIR, PLOTS_DIR]:
+for p in [DATA_OUT, RESULTS_DIR, HISTORY_DIR, PLOTS_DIR, MODELS_DIR]:
     p.mkdir(parents=True, exist_ok=True)
 
 INPUT_WINDOWS = [5, 10, 30, 90]
@@ -207,6 +208,10 @@ def train_cnn_window(input_window, output_window, epochs=120, batch_size=128, fo
 
     history_path, plot_path = save_history_and_plot(history, input_window, output_window)
 
+    model_path = MODELS_DIR / f"cnn_input{input_window}_output{output_window}_model.keras"
+    model.save(model_path)
+    print(f"Model saved: {model_path}")
+
     row = {
         "model": "CNN_Deep_Conv1D",
         "input_window": input_window,
@@ -220,6 +225,7 @@ def train_cnn_window(input_window, output_window, epochs=120, batch_size=128, fo
         "learning_rate": 3e-4,
         "history_path": str(history_path.relative_to(PROJECT_ROOT)),
         "plot_path": str(plot_path.relative_to(PROJECT_ROOT)),
+        "model_path": str(model_path.relative_to(PROJECT_ROOT)),
     }
 
     pd.DataFrame([row]).to_csv(result_path, index=False)
