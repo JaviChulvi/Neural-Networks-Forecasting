@@ -9,6 +9,10 @@ model_top4_equal         : Top-4 por retorno predicho; pesos iguales (25 % cada 
 model_top4_riskadjusted  : Top-4 por (retorno predicho / volatilidad trailing); pesos iguales.
 model_top4_threshold     : Como model_top4_equal, pero solo activos con predicción > umbral;
                            el resto va a cash (retorno 0 %).
+model_top4_propweights   : Top-4 por retorno predicho; pesos proporcionales a la predicción
+                           (solo positivos; si ninguno es positivo, 100 % cash).
+model_longshort          : Long top-4 / short bottom-4 por retorno predicho; pesos iguales
+                           en cada pata (±1/N_TOP). Estrategia market-neutral.
 bench_momentum           : Top-4 por retorno acumulado realizado en los 90 días anteriores.
 bench_momentum_input     : Top-4 por retorno acumulado en los últimos INPUT_WINDOW días
                            (mismo lookback que el modelo; comparación equitativa en información).
@@ -261,6 +265,28 @@ def strat_model_threshold(pred: np.ndarray, **_) -> dict:
     return {assets[i]: 1.0 / len(selected) for i in selected}
 
 
+def strat_model_propweights(pred: np.ndarray, **_) -> dict:
+    """Top-4 por retorno predicho; pesos proporcionales a la predicción (solo positivos)."""
+    top = np.argsort(pred)[::-1][:N_TOP]
+    selected = [i for i in top if pred[i] > 0]
+    if not selected:
+        return {}  # 100 % cash
+    pos_preds = np.array([pred[i] for i in selected])
+    weights = pos_preds / pos_preds.sum()
+    return {assets[i]: float(w) for i, w in zip(selected, weights)}
+
+
+def strat_model_longshort(pred: np.ndarray, **_) -> dict:
+    """Long top-4 / short bottom-4; pesos iguales en cada pata (±1/N_TOP)."""
+    order = np.argsort(pred)[::-1]
+    weights = {}
+    for i in order[:N_TOP]:
+        weights[assets[i]] = 1.0 / N_TOP
+    for i in order[-N_TOP:]:
+        weights[assets[i]] = -1.0 / N_TOP
+    return weights
+
+
 def strat_momentum(date: pd.Timestamp, **_) -> dict:
     iloc = returns_full.index.get_loc(date)
     window = returns_full.iloc[max(0, iloc - TRAILING_VOL_DAYS) : iloc]
@@ -286,6 +312,8 @@ STRATEGIES = {
     "model_top4_equal":        strat_model_equal,
     "model_top4_riskadjusted": strat_model_riskadjusted,
     "model_top4_threshold":    strat_model_threshold,
+    "model_top4_propweights":  strat_model_propweights,
+    "model_longshort":         strat_model_longshort,
     "bench_momentum":          strat_momentum,
     "bench_momentum_input":    strat_momentum_input,
     "bench_equalweight":       strat_equalweight,
@@ -382,6 +410,8 @@ def save_outputs(ret_df: pd.DataFrame, holdings: dict) -> None:
         "model_top4_equal":        dict(color="royalblue",  lw=2,   ls="-",  label=f"{model_label} Top-4 Equal"),
         "model_top4_riskadjusted": dict(color="darkorange", lw=2,   ls="-",  label=f"{model_label} Top-4 Risk-Adj."),
         "model_top4_threshold":    dict(color="seagreen",   lw=2,   ls="-",  label=f"{model_label} Top-4 + Umbral"),
+        "model_top4_propweights":  dict(color="crimson",    lw=2,   ls="-",  label=f"{model_label} Top-4 Prop. Pesos"),
+        "model_longshort":         dict(color="black",      lw=2,   ls="-",  label=f"{model_label} Long-Short"),
         "bench_momentum":          dict(color="purple",     lw=1.5, ls="-.", label="Momentum 90d"),
         "bench_momentum_input":    dict(color="darkgreen",  lw=1.5, ls=":",  label=f"Momentum {INPUT_WINDOW}d"),
         "bench_equalweight":       dict(color="gray",       lw=1.5, ls="--", label="Equal Weight (B&H)"),
