@@ -3,12 +3,17 @@
 Generated from notebooks `mixtos/mixto_input*_output*.ipynb` (14 windows),
 `mixtos/cnn_rnn_hybrid/` (4 windows), and `data/lr_benchmark.csv`.
 
-**Tuned Mixto** — 2-stage HP search over 4 architecture types (48 combinations in Stage 1):
+**Tuned Mixto** — 2-stage HP search over 7 architecture types:
 - `lstm` — stacked LSTM layers
 - `gru` — stacked GRU layers
 - `cnn_lstm` — Conv1D → LSTM
 - `cnn_gru` — Conv1D → GRU
-Grid: `arch × n_layers ∈ {1,2} × units ∈ {32,64,128} × dropout ∈ {0.0,0.2}`, then `lr × batch_size` (9 combos).
+- `cnn_lstm_mlp` — Conv1D → LSTM → MLP
+- `cnn_gru_mlp` — Conv1D → GRU → MLP
+- `cnn_mlp` — Conv1D → GlobalAveragePooling1D → MLP
+Grid: `arch × n_layers ∈ {1,2} × units ∈ {32,64,128} × dropout ∈ {0.0,0.2}`
+(× `kernel_size` for CNN variants in `input=30/90` notebooks), then `lr × batch_size` (9 combos).
+Stage 1 size: 84 combinations for `input=5/10`, 144 for `input=30`, 204 for `input=90`.
 Windows covered (14): all (input, output) combinations **except** (30,1) and (30,5).
 
 **Hybrid CNN-RNN** — Fixed architecture (no HP tuning), 3 types:
@@ -21,19 +26,17 @@ Note: (10,30) and (10,90) also have tuned notebooks; hybrid listed here for cros
 
 ## Main Conclusion
 
-- Mean test MAE **best tuned mixto** (14 windows) : `0.004872`
+- Mean test MAE **best tuned mixto** (14 windows) : `0.004871`
 - Mean test MAE **best hybrid CNN-RNN** (4 windows): `0.005354`
-- Mean test MAE **best mixed combined** (16 windows): `0.005377`
+- Mean test MAE **best mixed combined** (16 windows): `0.005376`
 - Mean test MAE **linear regression** (16 windows)  : `0.005668`
-- Windows where tuned mixto beats LR : **13 / 14**
+- Windows where tuned mixto beats LR : **14 / 14**
 - Windows where hybrid beats LR      : **4 / 4**
-- Windows where best mixed beats LR  : **15 / 16**
+- Windows where best mixed beats LR  : **16 / 16**
 
-Mixed models outperform linear regression in 15 of 16 windows.
-The only exception is `input=5, output=90`, where the signal-to-noise ratio is too low
-for any neural model to exceed the linear baseline.
+Mixed models outperform linear regression in 16 of 16 windows.
 Compared to the tuned RNN report (LSTM mean = 0.005362 over 16 windows), the mixed models
-achieve a mean of `0.005377` — the CNN component does not consistently
+achieve a mean of `0.005376` — the CNN component does not consistently
 improve over pure LSTM/GRU for this low-noise financial time-series task.
 
 ---
@@ -45,10 +48,11 @@ improve over pure LSTM/GRU for this low-noise financial time-series task.
 
 | arch_tag | arch_name | windows_won |
 | --- | --- | --- |
-| L | lstm | 6 |
-| CL | cnn_lstm | 4 |
-| CG | cnn_gru | 3 |
-| G | gru | 1 |
+| CM | cnn_mlp | 5 |
+| L | lstm | 4 |
+| CL | cnn_lstm | 3 |
+| CLM | cnn_lstm_mlp | 1 |
+| CG | cnn_gru | 1 |
 
 ---
 
@@ -56,9 +60,9 @@ improve over pure LSTM/GRU for this low-noise financial time-series task.
 
 | group | n_windows | mean_test | median_test | best_test | worst_test | mean_Δ_vs_lr | wins_vs_lr | mean_params |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Tuned Mixto | 14 | 0.004872 | 0.002342 | 0.001272 | 0.012279 | -0.000263 | 13 | 43703 |
+| Tuned Mixto | 14 | 0.004871 | 0.002349 | 0.001267 | 0.012273 | -0.000264 | 14 | 43088 |
 | Hybrid CNN-RNN | 4 | 0.005354 | 0.003950 | 0.001270 | 0.012244 | -0.000257 | 4 | 39383 |
-| Combined Best | 16 | 0.005377 | 0.003963 | 0.001272 | 0.012279 | -0.000291 | 15 | 43163 |
+| Combined Best | 16 | 0.005376 | 0.003970 | 0.001267 | 0.012273 | -0.000292 | 16 | 42625 |
 
 ---
 
@@ -68,12 +72,13 @@ improve over pure LSTM/GRU for this low-noise financial time-series task.
 
 | Salida \ Entrada | in=5 | in=10 | in=30 | in=90 |
 |:---:|:---:|:---:|:---:|:---:|
-| **out=1** | `0.012232` (L) | `0.012244` (CL) | `0.012244` (HL) | `0.012279` (CL) |
-| **out=5** | `0.005593` (G) | `0.005620` (CG) | `0.005581` (HG) | `0.005594` (L) |
-| **out=30** | `0.002339` (CL) | `0.002334` (L) | `0.002340` (L) | `0.002344` (L) |
-| **out=90** | `0.001275` (L) | `0.001272` (CG) | `0.001346` (CL) | `0.001396` (CG) |
+| **out=1** | `0.012213` (CM) | `0.012244` (CL) | `0.012244` (HL) | `0.012273` (CM) |
+| **out=5** | `0.005604` (CM) | `0.005604` (CM) | `0.005581` (HG) | `0.005594` (L) |
+| **out=30** | `0.002339` (CL) | `0.002334` (L) | `0.002340` (L) | `0.002358` (CM) |
+| **out=90** | `0.001267` (CLM) | `0.001276` (L) | `0.001346` (CL) | `0.001396` (CG) |
 
 > (L) = LSTM · (G) = GRU · (CL) = CNN-LSTM · (CG) = CNN-GRU
+> (CLM) = CNN-LSTM-MLP · (CGM) = CNN-GRU-MLP · (CM) = CNN-MLP
 > (HL) = Hybrid CNN-LSTM · (HG) = Hybrid CNN-GRU · (HB) = Hybrid CNN-BiGRU
 
 ---
@@ -82,21 +87,21 @@ improve over pure LSTM/GRU for this low-noise financial time-series task.
 
 | input_window | output_window | model_type | MAE_test | MAE_test_lr | delta | pct_delta |
 | --- | --- | --- | --- | --- | --- | --- |
-| 5 | 1 | L | 0.012232 | 0.012384 | -0.000152 | -1.23% |
-| 5 | 5 | G | 0.005593 | 0.005625 | -0.000032 | -0.56% |
+| 5 | 1 | CM | 0.012213 | 0.012384 | -0.000171 | -1.38% |
+| 5 | 5 | CM | 0.005604 | 0.005625 | -0.000021 | -0.37% |
 | 5 | 30 | CL | 0.002339 | 0.002340 | -0.000001 | -0.05% |
-| 5 | 90 | L | 0.001275 | 0.001271 | +0.000004 | +0.29% |
+| 5 | 90 | CLM | 0.001267 | 0.001271 | -0.000004 | -0.34% |
 | 10 | 1 | CL | 0.012244 | 0.012554 | -0.000310 | -2.47% |
-| 10 | 5 | CG | 0.005620 | 0.005698 | -0.000078 | -1.36% |
+| 10 | 5 | CM | 0.005604 | 0.005698 | -0.000094 | -1.64% |
 | 10 | 30 | L | 0.002334 | 0.002358 | -0.000024 | -1.04% |
-| 10 | 90 | CG | 0.001272 | 0.001282 | -0.000010 | -0.81% |
+| 10 | 90 | L | 0.001276 | 0.001282 | -0.000006 | -0.50% |
 | 30 | 1 | HL | 0.012244 | 0.012924 | -0.000680 | -5.26% |
 | 30 | 5 | HG | 0.005581 | 0.005877 | -0.000295 | -5.03% |
 | 30 | 30 | L | 0.002340 | 0.002436 | -0.000096 | -3.95% |
 | 30 | 90 | CL | 0.001346 | 0.001351 | -0.000005 | -0.40% |
-| 90 | 1 | CL | 0.012279 | 0.014095 | -0.001816 | -12.89% |
+| 90 | 1 | CM | 0.012273 | 0.014095 | -0.001822 | -12.93% |
 | 90 | 5 | L | 0.005594 | 0.006348 | -0.000754 | -11.88% |
-| 90 | 30 | L | 0.002344 | 0.002628 | -0.000284 | -10.82% |
+| 90 | 30 | CM | 0.002358 | 0.002628 | -0.000270 | -10.28% |
 | 90 | 90 | CG | 0.001396 | 0.001518 | -0.000122 | -8.04% |
 
 ---
@@ -108,10 +113,10 @@ improve over pure LSTM/GRU for this low-noise financial time-series task.
 
 | Output \ Input | in=5 | in=10 | in=30 | in=90 |
 |:---:|:---:|:---:|:---:|:---:|
-| **out=1** | `0.012232` | `0.012244` | — | `0.012279` |
-| **out=5** | `0.005593` | `0.005620` | — | `0.005594` |
-| **out=30** | `0.002339` | `0.002334` | `0.002340` | `0.002344` |
-| **out=90** | `0.001275` | `0.001272` | `0.001346` | `0.001396` |
+| **out=1** | `0.012213` | `0.012244` | — | `0.012273` |
+| **out=5** | `0.005604` | `0.005604` | — | `0.005594` |
+| **out=30** | `0.002339` | `0.002334` | `0.002340` | `0.002358` |
+| **out=90** | `0.001267` | `0.001276` | `0.001346` | `0.001396` |
 
 ---
 
@@ -144,10 +149,10 @@ improve over pure LSTM/GRU for this low-noise financial time-series task.
 
 | Output \ Input | in=5 | in=10 | in=30 | in=90 |
 |:---:|:---:|:---:|:---:|:---:|
-| **out=1** | `-0.000152` ↓ | `-0.000310` ↓ | — | `-0.001816` ↓ |
-| **out=5** | `-0.000032` ↓ | `-0.000078` ↓ | — | `-0.000754` ↓ |
-| **out=30** | `-0.000001` ↓ | `-0.000024` ↓ | `-0.000096` ↓ | `-0.000284` ↓ |
-| **out=90** | `+0.000004` ↑ | `-0.000010` ↓ | `-0.000005` ↓ | `-0.000122` ↓ |
+| **out=1** | `-0.000171` ↓ | `-0.000310` ↓ | — | `-0.001822` ↓ |
+| **out=5** | `-0.000021` ↓ | `-0.000094` ↓ | — | `-0.000754` ↓ |
+| **out=30** | `-0.000001` ↓ | `-0.000024` ↓ | `-0.000096` ↓ | `-0.000270` ↓ |
+| **out=90** | `-0.000004` ↓ | `-0.000006` ↓ | `-0.000005` ↓ | `-0.000122` ↓ |
 
 ## Δ (Hybrid CNN-RNN best − LR)
 
@@ -166,29 +171,30 @@ improve over pure LSTM/GRU for this low-noise financial time-series task.
 
 | Output \ Input | in=5 | in=10 | in=30 | in=90 |
 |:---:|:---:|:---:|:---:|:---:|
-| **out=1** | `16247` (L) | `72023` (CL) | `43415` (HL) | `12791` (CL) |
-| **out=5** | `160791` (G) | `9335` (CG) | `35351` (HG) | `16247` (L) |
-| **out=30** | `11319` (CL) | `16247` (L) | `16247` (L) | `7927` (L) |
-| **out=90** | `7927` (L) | `15671` (CG) | `38999` (CL) | `210071` (CG) |
+| **out=1** | `4215` (CM) | `72023` (CL) | `43415` (HL) | `46999` (CM) |
+| **out=5** | `10135` (CM) | `10135` (CM) | `35351` (HG) | `16247` (L) |
+| **out=30** | `11319` (CL) | `16247` (L) | `16247` (L) | `16023` (CM) |
+| **out=90** | `77527` (CLM) | `57047` (L) | `38999` (CL) | `210071` (CG) |
 
 > (L) = LSTM · (G) = GRU · (CL) = CNN-LSTM · (CG) = CNN-GRU
+> (CLM) = CNN-LSTM-MLP · (CGM) = CNN-GRU-MLP · (CM) = CNN-MLP
 > (HL) = Hybrid CNN-LSTM · (HG) = Hybrid CNN-GRU
 
 ---
 
 ## Best Model Hyperparameters Per Window
 
-### in=5, out=1  —  LSTM [tuned]  |  test_mae = `0.012232`  |  Δ vs LR = `-0.000152` (-1.23%)
+### in=5, out=1  —  CNN-MLP [tuned]  |  test_mae = `0.012213`  |  Δ vs LR = `-0.000171` (-1.38%)
 
-- **Architecture:** 2 LSTM layer(s) · 32 units/layer · dropout = 0.2
-- **Training:** lr = 1e-04 · batch_size = 256
-- **Params:** 16,247
+- **Architecture:** Conv1D(32 filters, ks=3) → GlobalAveragePooling1D → MLP × 2 layer(s) · dropout = 0.2
+- **Training:** lr = 1e-04 · batch_size = 64
+- **Params:** 4,215
 
-### in=5, out=5  —  GRU [tuned]  |  test_mae = `0.005593`  |  Δ vs LR = `-0.000032` (-0.56%)
+### in=5, out=5  —  CNN-MLP [tuned]  |  test_mae = `0.005604`  |  Δ vs LR = `-0.000021` (-0.37%)
 
-- **Architecture:** 2 GRU layer(s) · 128 units/layer · dropout = 0.2
+- **Architecture:** Conv1D(64 filters, ks=3) → GlobalAveragePooling1D → MLP × 1 layer(s) · dropout = 0.0
 - **Training:** lr = 1e-03 · batch_size = 128
-- **Params:** 160,791
+- **Params:** 10,135
 
 ### in=5, out=30  —  CNN-LSTM [tuned]  |  test_mae = `0.002339`  |  Δ vs LR = `-0.000001` (-0.05%)
 
@@ -196,11 +202,11 @@ improve over pure LSTM/GRU for this low-noise financial time-series task.
 - **Training:** lr = 1e-04 · batch_size = 256
 - **Params:** 11,319
 
-### in=5, out=90  —  LSTM [tuned]  |  test_mae = `0.001275`  |  Δ vs LR = `+0.000004` (+0.29%)
+### in=5, out=90  —  CNN-LSTM-MLP [tuned]  |  test_mae = `0.001267`  |  Δ vs LR = `-0.000004` (-0.34%)
 
-- **Architecture:** 1 LSTM layer(s) · 32 units/layer · dropout = 0.2
+- **Architecture:** Conv1D(64 filters, ks=3) → LSTM(64) × 2 layer(s) → MLP(2 dense layers) · dropout = 0.0
 - **Training:** lr = 1e-03 · batch_size = 128
-- **Params:** 7,927
+- **Params:** 77,527
 
 ### in=10, out=1  —  CNN-LSTM [tuned]  |  test_mae = `0.012244`  |  Δ vs LR = `-0.000310` (-2.47%)
 
@@ -208,11 +214,11 @@ improve over pure LSTM/GRU for this low-noise financial time-series task.
 - **Training:** lr = 1e-04 · batch_size = 256
 - **Params:** 72,023
 
-### in=10, out=5  —  CNN-GRU [tuned]  |  test_mae = `0.005620`  |  Δ vs LR = `-0.000078` (-1.36%)
+### in=10, out=5  —  CNN-MLP [tuned]  |  test_mae = `0.005604`  |  Δ vs LR = `-0.000094` (-1.64%)
 
-- **Architecture:** Conv1D(32 filters, ks=3) → GRU(32) × 1 layer(s) · dropout = 0.2
-- **Training:** lr = 1e-04 · batch_size = 64
-- **Params:** 9,335
+- **Architecture:** Conv1D(64 filters, ks=3) → GlobalAveragePooling1D → MLP × 1 layer(s) · dropout = 0.2
+- **Training:** lr = 1e-03 · batch_size = 128
+- **Params:** 10,135
 
 ### in=10, out=30  —  LSTM [tuned]  |  test_mae = `0.002334`  |  Δ vs LR = `-0.000024` (-1.04%)
 
@@ -220,11 +226,11 @@ improve over pure LSTM/GRU for this low-noise financial time-series task.
 - **Training:** lr = 1e-03 · batch_size = 128
 - **Params:** 16,247
 
-### in=10, out=90  —  CNN-GRU [tuned]  |  test_mae = `0.001272`  |  Δ vs LR = `-0.000010` (-0.81%)
+### in=10, out=90  —  LSTM [tuned]  |  test_mae = `0.001276`  |  Δ vs LR = `-0.000006` (-0.50%)
 
-- **Architecture:** Conv1D(32 filters, ks=3) → GRU(32) × 2 layer(s) · dropout = 0.2
-- **Training:** lr = 1e-04 · batch_size = 256
-- **Params:** 15,671
+- **Architecture:** 2 LSTM layer(s) · 64 units/layer · dropout = 0.2
+- **Training:** lr = 1e-04 · batch_size = 64
+- **Params:** 57,047
 
 ### in=30, out=1  —  Hybrid CNN-LSTM [hybrid (fixed HP)]  |  test_mae = `0.012244`  |  Δ vs LR = `-0.000680` (-5.26%)
 
@@ -250,11 +256,11 @@ improve over pure LSTM/GRU for this low-noise financial time-series task.
 - **Training:** lr = 1e-03 · batch_size = 128
 - **Params:** 38,999
 
-### in=90, out=1  —  CNN-LSTM [tuned]  |  test_mae = `0.012279`  |  Δ vs LR = `-0.001816` (-12.89%)
+### in=90, out=1  —  CNN-MLP [tuned]  |  test_mae = `0.012273`  |  Δ vs LR = `-0.001822` (-12.93%)
 
-- **Architecture:** Conv1D(32 filters, ks=5) → LSTM(32) × 1 layer(s) · dropout = 0.2
-- **Training:** lr = 1e-04 · batch_size = 64
-- **Params:** 12,791
+- **Architecture:** Conv1D(128 filters, ks=7) → GlobalAveragePooling1D → MLP × 2 layer(s) · dropout = 0.0
+- **Training:** lr = 1e-04 · batch_size = 256
+- **Params:** 46,999
 
 ### in=90, out=5  —  LSTM [tuned]  |  test_mae = `0.005594`  |  Δ vs LR = `-0.000754` (-11.88%)
 
@@ -262,11 +268,11 @@ improve over pure LSTM/GRU for this low-noise financial time-series task.
 - **Training:** lr = 1e-04 · batch_size = 256
 - **Params:** 16,247
 
-### in=90, out=30  —  LSTM [tuned]  |  test_mae = `0.002344`  |  Δ vs LR = `-0.000284` (-10.82%)
+### in=90, out=30  —  CNN-MLP [tuned]  |  test_mae = `0.002358`  |  Δ vs LR = `-0.000270` (-10.28%)
 
-- **Architecture:** 1 LSTM layer(s) · 32 units/layer · dropout = 0.2
-- **Training:** lr = 1e-04 · batch_size = 256
-- **Params:** 7,927
+- **Architecture:** Conv1D(64 filters, ks=7) → GlobalAveragePooling1D → MLP × 1 layer(s) · dropout = 0.0
+- **Training:** lr = 1e-03 · batch_size = 128
+- **Params:** 16,023
 
 ### in=90, out=90  —  CNN-GRU [tuned]  |  test_mae = `0.001396`  |  Δ vs LR = `-0.000122` (-8.04%)
 
@@ -279,24 +285,20 @@ improve over pure LSTM/GRU for this low-noise financial time-series task.
 
 ## Interpretation
 
-- **CNN vs pure RNN**: a CNN prefix improves performance in roughly half of the tuned windows
-  (7 / 14).
-  For short input windows (`input=5/10`) the benefit is marginal; for longer inputs (`input≥30`)
-  CNN tends to help with `cnn_lstm` winning several windows.
-- **Pure LSTM dominance**: LSTM (tag L) wins the most windows (6 / 14) and achieves competitive
-  test MAE across all input window sizes, suggesting the recurrent component already captures
-  the relevant temporal patterns.
+- **CNN/MLP variants**: after adding `cnn_lstm_mlp`, `cnn_gru_mlp` and `cnn_mlp`,
+  the tuned search can select dense heads when they reduce validation MAE.
+- **Architecture selection**: the winning-count table above is now the best summary of which
+  architectures actually won after the expanded search.
 - **Hybrid vs tuned**: the fixed hybrid (64 units, lr=3e-4) beats the 2-stage tuned result for
   (10,30) by 0.000014 MAE, a negligible margin likely due to random variation. The tuned search
   generally matches or exceeds the hybrid for (10,90) and performs competitively for (30,1)/(30,5).
 - **Input window trend**: the advantage over LR grows consistently with `input_window`, reaching
   −10 to −13 % for `input=90` (same pattern as pure RNN models).
-- **Long outputs (`output=90`)**: for `input=5` the mixto barely matches LR (delta ≈ 0); for
-  larger `input` the model captures the long-run return signal effectively (up to −8 %).
+- **Long outputs (`output=90`)**: the expanded mixed search now beats LR in all reported
+  windows, including `input=5, output=90`.
 - **Comparison with pure RNN**: mean test MAE over 16 windows — Tuned LSTM = 0.005362,
-  Best Mixed = `0.005377`. The mixed search adds significant
+  Best Mixed = `0.005376`. The mixed search adds significant
   search overhead (4× more architectures per window) but does not systematically improve
   over a well-tuned LSTM/GRU, consistent with the low signal-to-noise nature of the data.
-- **Parameter efficiency**: winners range from 7,927 params (lstm-1-32) to 210,071 params
-  (cnn_gru-2-128). Larger models are selected only when `input` and `output` windows are
-  both large (e.g. in=90, out=90).
+- **Parameter efficiency**: winners range from compact CNN-MLP models to larger recurrent
+  hybrids; see the parameter matrix for the exact counts per window.

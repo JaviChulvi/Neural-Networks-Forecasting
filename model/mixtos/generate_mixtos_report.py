@@ -4,8 +4,10 @@ against linear regression.
 
 Data sources:
   - Tuned Mixto (14 windows): model/mixtos/mixto_input*_output*.ipynb
-    Architectures searched: lstm, gru, cnn_lstm, cnn_gru
-    2-stage HP search: (arch × n_layers × units × dropout) then (lr × batch_size)
+    Architectures searched: lstm, gru, cnn_lstm, cnn_gru,
+    cnn_lstm_mlp, cnn_gru_mlp, cnn_mlp
+    2-stage HP search: (arch × n_layers × units × dropout [× kernel_size])
+    then (lr × batch_size)
   - Hybrid CNN-RNN (4 windows): data/mixtos/cnn_rnn_hybrid/hybrid_all_results.csv
     Fixed architectures (no HP tuning): CNN_LSTM, CNN_GRU, CNN_BiGRU
     Windows covered: (10,30), (10,90), (30,1), (30,5)
@@ -79,6 +81,39 @@ def compute_n_params(arch: str, n_layers: int, units: int,
             n += 3 * (inp + units) * units + 6 * units
             inp = units
         n += units * n_out + n_out
+
+    elif arch == "cnn_lstm_mlp":
+        n = kernel_size * n_in * units + units            # Conv1D(units, ks)
+        inp = units
+        for _ in range(n_layers):
+            n += 4 * (inp + units) * units + 4 * units
+            inp = units
+        first_dense = units
+        second_dense = max(units // 2, 16)
+        n += inp * first_dense + first_dense
+        n += first_dense * second_dense + second_dense
+        n += second_dense * n_out + n_out
+
+    elif arch == "cnn_gru_mlp":
+        n = kernel_size * n_in * units + units            # Conv1D(units, ks)
+        inp = units
+        for _ in range(n_layers):
+            n += 3 * (inp + units) * units + 6 * units
+            inp = units
+        first_dense = units
+        second_dense = max(units // 2, 16)
+        n += inp * first_dense + first_dense
+        n += first_dense * second_dense + second_dense
+        n += second_dense * n_out + n_out
+
+    elif arch == "cnn_mlp":
+        n = kernel_size * n_in * units + units            # Conv1D(units, ks)
+        inp = units                                      # GlobalAveragePooling1D output
+        for i in range(n_layers):
+            dense_units = units if i == 0 else max(units // 2, 16)
+            n += inp * dense_units + dense_units
+            inp = dense_units
+        n += inp * n_out + n_out
 
     else:
         n = 0
@@ -160,7 +195,28 @@ def parse_mixto_notebook(nb_path: Path):
 
 # ── Load tuned mixto results (14 windows) ──────────────────────────────────────
 
-_ARCH_TAG = {"lstm": "L", "gru": "G", "cnn_lstm": "CL", "cnn_gru": "CG"}
+_ARCH_TAG = {
+    "lstm": "L",
+    "gru": "G",
+    "cnn_lstm": "CL",
+    "cnn_gru": "CG",
+    "cnn_lstm_mlp": "CLM",
+    "cnn_gru_mlp": "CGM",
+    "cnn_mlp": "CM",
+}
+
+_ARCH_FULL_NAME = {
+    "L": "LSTM",
+    "G": "GRU",
+    "CL": "CNN-LSTM",
+    "CG": "CNN-GRU",
+    "CLM": "CNN-LSTM-MLP",
+    "CGM": "CNN-GRU-MLP",
+    "CM": "CNN-MLP",
+    "HL": "Hybrid CNN-LSTM",
+    "HG": "Hybrid CNN-GRU",
+    "HB": "Hybrid CNN-BiGRU",
+}
 
 mixto_rows = []
 for nb_path in sorted(SCRIPT_DIR.glob("mixto_input*_output*.ipynb")):
@@ -329,6 +385,7 @@ def best_model_md(df: pd.DataFrame) -> str:
     rows += [
         "",
         "> (L) = LSTM · (G) = GRU · (CL) = CNN-LSTM · (CG) = CNN-GRU",
+        "> (CLM) = CNN-LSTM-MLP · (CGM) = CNN-GRU-MLP · (CM) = CNN-MLP",
         "> (HL) = Hybrid CNN-LSTM · (HG) = Hybrid CNN-GRU · (HB) = Hybrid CNN-BiGRU",
     ]
     return "\n".join(rows)
@@ -374,6 +431,7 @@ def params_md(df: pd.DataFrame) -> str:
     rows += [
         "",
         "> (L) = LSTM · (G) = GRU · (CL) = CNN-LSTM · (CG) = CNN-GRU",
+        "> (CLM) = CNN-LSTM-MLP · (CGM) = CNN-GRU-MLP · (CM) = CNN-MLP",
         "> (HL) = Hybrid CNN-LSTM · (HG) = Hybrid CNN-GRU",
     ]
     return "\n".join(rows)
@@ -398,14 +456,10 @@ def per_window_detail_md(df: pd.DataFrame) -> str:
 def hp_detail_md(df: pd.DataFrame) -> str:
     """Per-window best HP section."""
     lines = []
-    _full_name = {
-        "L": "LSTM", "G": "GRU", "CL": "CNN-LSTM", "CG": "CNN-GRU",
-        "HL": "Hybrid CNN-LSTM", "HG": "Hybrid CNN-GRU", "HB": "Hybrid CNN-BiGRU",
-    }
     for _, row in df.sort_values(["input_window", "output_window"]).iterrows():
         iw, ow     = int(row.input_window), int(row.output_window)
         tag        = row.model_type
-        arch_name  = _full_name.get(tag, tag)
+        arch_name  = _ARCH_FULL_NAME.get(tag, tag)
         source_lbl = "tuned" if row.source == "tuned" else "hybrid (fixed HP)"
         lines += [
             f"### in={iw}, out={ow}  —  {arch_name} [{source_lbl}]  |  "
@@ -415,7 +469,20 @@ def hp_detail_md(df: pd.DataFrame) -> str:
         if row.source == "tuned":
             arch = row.arch
             has_cnn = arch.startswith("cnn_")
-            if has_cnn:
+            if arch == "cnn_mlp":
+                lines.append(
+                    f"- **Architecture:** Conv1D({int(row.units)} filters, ks={int(row.kernel_size)}) "
+                    f"→ GlobalAveragePooling1D → MLP × {int(row.n_layers)} layer(s)"
+                    f" · dropout = {row.dropout:.1f}"
+                )
+            elif arch in {"cnn_lstm_mlp", "cnn_gru_mlp"}:
+                rnn_name = "LSTM" if "lstm" in arch else "GRU"
+                lines.append(
+                    f"- **Architecture:** Conv1D({int(row.units)} filters, ks={int(row.kernel_size)}) "
+                    f"→ {rnn_name}({int(row.units)}) × {int(row.n_layers)} layer(s)"
+                    f" → MLP(2 dense layers) · dropout = {row.dropout:.1f}"
+                )
+            elif has_cnn:
                 lines.append(
                     f"- **Architecture:** Conv1D({int(row.units)} filters, ks={int(row.kernel_size)}) "
                     f"→ {arch.split('_')[1].upper()}({int(row.units)}) × {int(row.n_layers)} layer(s)"
@@ -477,12 +544,17 @@ md = f"""\
 Generated from notebooks `mixtos/mixto_input*_output*.ipynb` (14 windows),
 `mixtos/cnn_rnn_hybrid/` (4 windows), and `data/lr_benchmark.csv`.
 
-**Tuned Mixto** — 2-stage HP search over 4 architecture types (48 combinations in Stage 1):
+**Tuned Mixto** — 2-stage HP search over 7 architecture types:
 - `lstm` — stacked LSTM layers
 - `gru` — stacked GRU layers
 - `cnn_lstm` — Conv1D → LSTM
 - `cnn_gru` — Conv1D → GRU
-Grid: `arch × n_layers ∈ {{1,2}} × units ∈ {{32,64,128}} × dropout ∈ {{0.0,0.2}}`, then `lr × batch_size` (9 combos).
+- `cnn_lstm_mlp` — Conv1D → LSTM → MLP
+- `cnn_gru_mlp` — Conv1D → GRU → MLP
+- `cnn_mlp` — Conv1D → GlobalAveragePooling1D → MLP
+Grid: `arch × n_layers ∈ {{1,2}} × units ∈ {{32,64,128}} × dropout ∈ {{0.0,0.2}}`
+(× `kernel_size` for CNN variants in `input=30/90` notebooks), then `lr × batch_size` (9 combos).
+Stage 1 size: 84 combinations for `input=5/10`, 144 for `input=30`, 204 for `input=90`.
 Windows covered (14): all (input, output) combinations **except** (30,1) and (30,5).
 
 **Hybrid CNN-RNN** — Fixed architecture (no HP tuning), 3 types:
@@ -504,8 +576,6 @@ Note: (10,30) and (10,90) also have tuned notebooks; hybrid listed here for cros
 - Windows where best mixed beats LR  : **{combined_wins_vs_lr} / 16**
 
 Mixed models outperform linear regression in {combined_wins_vs_lr} of 16 windows.
-The only exception is `input=5, output=90`, where the signal-to-noise ratio is too low
-for any neural model to exceed the linear baseline.
 Compared to the tuned RNN report (LSTM mean = 0.005362 over 16 windows), the mixed models
 achieve a mean of `{combined_stats['mean_test']:.6f}` — the CNN component does not consistently
 improve over pure LSTM/GRU for this low-noise financial time-series task.
@@ -592,27 +662,23 @@ improve over pure LSTM/GRU for this low-noise financial time-series task.
 
 ## Interpretation
 
-- **CNN vs pure RNN**: a CNN prefix improves performance in roughly half of the tuned windows
-  ({arch_wins_df[arch_wins_df.arch_tag.isin(['CL','CG'])]['wins'].sum()} / 14).
-  For short input windows (`input=5/10`) the benefit is marginal; for longer inputs (`input≥30`)
-  CNN tends to help with `cnn_lstm` winning several windows.
-- **Pure LSTM dominance**: LSTM (tag L) wins the most windows ({arch_wins_df[arch_wins_df.arch_tag=='L']['wins'].iloc[0] if not arch_wins_df[arch_wins_df.arch_tag=='L'].empty else 0} / 14) and achieves competitive
-  test MAE across all input window sizes, suggesting the recurrent component already captures
-  the relevant temporal patterns.
+- **CNN/MLP variants**: after adding `cnn_lstm_mlp`, `cnn_gru_mlp` and `cnn_mlp`,
+  the tuned search can select dense heads when they reduce validation MAE.
+- **Architecture selection**: the winning-count table above is now the best summary of which
+  architectures actually won after the expanded search.
 - **Hybrid vs tuned**: the fixed hybrid (64 units, lr=3e-4) beats the 2-stage tuned result for
   (10,30) by 0.000014 MAE, a negligible margin likely due to random variation. The tuned search
   generally matches or exceeds the hybrid for (10,90) and performs competitively for (30,1)/(30,5).
 - **Input window trend**: the advantage over LR grows consistently with `input_window`, reaching
   −10 to −13 % for `input=90` (same pattern as pure RNN models).
-- **Long outputs (`output=90`)**: for `input=5` the mixto barely matches LR (delta ≈ 0); for
-  larger `input` the model captures the long-run return signal effectively (up to −8 %).
+- **Long outputs (`output=90`)**: the expanded mixed search now beats LR in all reported
+  windows, including `input=5, output=90`.
 - **Comparison with pure RNN**: mean test MAE over 16 windows — Tuned LSTM = 0.005362,
   Best Mixed = `{combined_stats['mean_test']:.6f}`. The mixed search adds significant
   search overhead (4× more architectures per window) but does not systematically improve
   over a well-tuned LSTM/GRU, consistent with the low signal-to-noise nature of the data.
-- **Parameter efficiency**: winners range from 7,927 params (lstm-1-32) to 210,071 params
-  (cnn_gru-2-128). Larger models are selected only when `input` and `output` windows are
-  both large (e.g. in=90, out=90).
+- **Parameter efficiency**: winners range from compact CNN-MLP models to larger recurrent
+  hybrids; see the parameter matrix for the exact counts per window.
 """
 
 OUT_MD.write_text(md, encoding="utf-8")
