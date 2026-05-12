@@ -150,8 +150,9 @@ def save_history_and_plot(history, input_window, output_window):
     return history_path, plot_path
 
 
-def train_cnn_window(input_window, output_window, epochs=120, batch_size=128, force=False):
-    result_path = RESULTS_DIR / f"cnn_input{input_window}_output{output_window}_results.csv"
+def train_cnn_window(input_window, output_window, epochs=120, batch_size=128, force=False, returns_file="returns.parquet", relative=False):
+    suffix = "_rel" if relative else ""
+    result_path = RESULTS_DIR / f"cnn_input{input_window}_output{output_window}{suffix}_results.csv"
 
     if result_path.exists() and not force:
         print(f"SKIP existing result: {result_path}")
@@ -159,7 +160,7 @@ def train_cnn_window(input_window, output_window, epochs=120, batch_size=128, fo
 
     print("")
     print("=" * 80)
-    print(f"Training CNN Deep Conv1D | input={input_window} | output={output_window}")
+    print(f"Training CNN Deep Conv1D | input={input_window} | output={output_window} | relative={relative}")
     print("=" * 80)
 
     K.clear_session()
@@ -168,6 +169,8 @@ def train_cnn_window(input_window, output_window, epochs=120, batch_size=128, fo
     d = get_train_test(
         input_window_size=input_window,
         output_window_size=output_window,
+        returns_file=returns_file,
+        relative=relative,
     )
 
     X_train_raw, y_train_raw = d.X_train, d.y_train
@@ -208,7 +211,7 @@ def train_cnn_window(input_window, output_window, epochs=120, batch_size=128, fo
 
     history_path, plot_path = save_history_and_plot(history, input_window, output_window)
 
-    model_path = MODELS_DIR / f"cnn_input{input_window}_output{output_window}_model.keras"
+    model_path = MODELS_DIR / f"cnn_input{input_window}_output{output_window}{suffix}_model.keras"
     model.save(model_path)
     print(f"Model saved: {model_path}")
 
@@ -216,6 +219,7 @@ def train_cnn_window(input_window, output_window, epochs=120, batch_size=128, fo
         "model": "CNN_Deep_Conv1D",
         "input_window": input_window,
         "output_window": output_window,
+        "relative_target": relative,
         "MAE_train": mae_train,
         "MAE_val": mae_val,
         "MAE_test": mae_test,
@@ -231,13 +235,14 @@ def train_cnn_window(input_window, output_window, epochs=120, batch_size=128, fo
     pd.DataFrame([row]).to_csv(result_path, index=False)
 
     mlflow = configure_mlflow("cnn_deep_conv1d_grid")
-    run_name = f"cnn_deep_input{input_window}_output{output_window}"
+    run_name = f"cnn_deep_input{input_window}_output{output_window}{suffix}"
 
     with mlflow.start_run(run_name=run_name):
         mlflow.log_params({
             "model": "CNN_Deep_Conv1D",
             "input_window": input_window,
             "output_window": output_window,
+            "relative_target": relative,
             "batch_size": batch_size,
             "learning_rate": 3e-4,
             "params": params,

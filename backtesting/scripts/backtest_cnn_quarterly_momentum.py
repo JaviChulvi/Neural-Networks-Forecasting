@@ -1,35 +1,39 @@
-"""Backtesting trimestral del CNN Deep Conv1D sobre el año 2025.
+"""Backtesting trimestral CNN / LSTM sobre el año 2025.
+
+El modelo a usar se elige con la variable de entorno BACKTEST_MODEL
+(valores: "cnn" o "lstm"; por defecto "cnn").
 
 Estrategias
 -----------
-cnn_top4_equal         : Top-4 por retorno predicho; pesos iguales (25 % cada uno).
-cnn_top4_riskadjusted  : Top-4 por (retorno predicho / volatilidad trailing); pesos iguales.
-cnn_top4_threshold     : Como cnn_top4_equal, pero solo activos con predicción > umbral;
-                         el resto va a cash (retorno 0 %).
-bench_momentum         : Top-4 por retorno acumulado realizado en los 90 días anteriores.
-bench_equalweight      : Buy & Hold con peso igual en los 23 activos (benchmark pasivo).
+model_top4_equal         : Top-4 por retorno predicho; pesos iguales (25 % cada uno).
+model_top4_riskadjusted  : Top-4 por (retorno predicho / volatilidad trailing); pesos iguales.
+model_top4_threshold     : Como model_top4_equal, pero solo activos con predicción > umbral;
+                           el resto va a cash (retorno 0 %).
+bench_momentum           : Top-4 por retorno acumulado realizado en los 90 días anteriores.
+bench_equalweight        : Buy & Hold con peso igual en los 23 activos (benchmark pasivo).
 
 Uso como script
 ---------------
     python backtesting/scripts/backtest_cnn_quarterly_momentum.py
-    CNN_INPUT_WINDOW=30 CNN_OUTPUT_WINDOW=90 python backtesting/scripts/backtest_cnn_quarterly_momentum.py
-    CNN_RELATIVE=1 python backtesting/scripts/backtest_cnn_quarterly_momentum.py
+    BACKTEST_MODEL=lstm python backtesting/scripts/backtest_cnn_quarterly_momentum.py
+    BACKTEST_MODEL=cnn CNN_INPUT_WINDOW=30 python backtesting/scripts/backtest_cnn_quarterly_momentum.py
+    CNN_RELATIVE=1 python backtesting/scripts/backtest_cnn_quarterly_momentum.py  # solo CNN
 
 Uso como módulo (desde un notebook, por ejemplo)
 -------------------------------------------------
     import backtest_cnn_quarterly_momentum as bt
-    bt.setup()                                        # input=10, output=90, absoluto
-    bt.setup(input_window=30)                         # input=30, output=90, absoluto
-    bt.setup(input_window=10, output_window=90, relative=True)  # target relativo
+    bt.setup()                                              # CNN input=10, output=90, absoluto
+    bt.setup(model_type="lstm")                             # LSTM input=10, output=90
+    bt.setup(model_type="cnn", input_window=30)             # CNN input=30, output=90
+    bt.setup(model_type="cnn", relative=True)               # CNN target relativo
     ret_df, holdings = bt.run_backtest()
-    metrics = bt.compute_metrics('cnn_top4_equal', ret_df, holdings)
+    metrics = bt.compute_metrics('model_top4_equal', ret_df, holdings)
 
 Salidas (solo al ejecutar como script)
 ---------------------------------------
-    data/backtest/portfolio_values_momentum_in{INPUT}_out{OUTPUT}.csv          (absoluto)
-    data/backtest/portfolio_values_momentum_rel_in{INPUT}_out{OUTPUT}.csv       (relativo)
-    data/backtest/metrics_summary_momentum[_rel]_in{INPUT}_out{OUTPUT}.csv
-    data/backtest/cumulative_return_momentum[_rel]_in{INPUT}_out{OUTPUT}.png
+    data/backtest/portfolio_values_momentum_{model}[_rel]_in{INPUT}_out{OUTPUT}.csv
+    data/backtest/metrics_summary_momentum_{model}[_rel]_in{INPUT}_out{OUTPUT}.csv
+    data/backtest/cumulative_return_momentum_{model}[_rel]_in{INPUT}_out{OUTPUT}.png
 """
 
 import os
@@ -53,6 +57,7 @@ from util import load_returns, get_train_test
 from cnn_utils import MODELS_DIR, split_train_val
 
 # ── Configuración ─────────────────────────────────────────────────────────────
+MODEL_TYPE = os.getenv("BACKTEST_MODEL", "cnn")        # "cnn" o "lstm"
 INPUT_WINDOW = int(os.getenv("CNN_INPUT_WINDOW", "10"))
 OUTPUT_WINDOW = int(os.getenv("CNN_OUTPUT_WINDOW", "90"))
 RELATIVE = os.getenv("CNN_RELATIVE", "0") == "1"
@@ -61,12 +66,13 @@ TRAILING_VOL_DAYS = 90
 PRED_THRESHOLD = 1e-4   # media diaria log-return mínima (~1 % en 90 días de holding)
 RISK_FREE_ANNUAL = 0.04
 
+LSTM_MODELS_DIR = PROJECT_ROOT / "data" / "rnn" / "saved_models"
 OUTPUT_DIR = PROJECT_ROOT / "data" / "backtest"
 
 # ── Estado del módulo (poblado por setup()) ───────────────────────────────────
 # Typed as Any: estas variables se asignan en setup(); usarlas antes lanza NameError.
 model: Any
-scaler: Any
+scaler: Any          # StandardScaler para CNN; None para LSTM
 returns_full: Any
 assets: Any
 n_assets: Any
@@ -76,30 +82,42 @@ end_of_backtest: Any
 relative: Any
 
 
+def _resolve_model_path(mtype: str, in_w: int, out_w: int, rel: bool) -> Path:
+    if mtype == "lstm":
+        return LSTM_MODELS_DIR / f"rnn_lstm_input{in_w}_output{out_w}_model.keras"
+    suffix = "_rel" if rel else ""
+    return MODELS_DIR / f"cnn_input{in_w}_output{out_w}{suffix}_model.keras"
+
+
+def _train_script_name(mtype: str, in_w: int, out_w: int, rel: bool) -> str:
+    if mtype == "lstm":
+        return f"train_lstm_in{in_w}_out{out_w}_to2024.py"
+    return f"train_cnn_in{in_w}_out{out_w}{'_rel' if rel else ''}_to2024.py"
+
+
 # ── Setup ─────────────────────────────────────────────────────────────────────
 def setup(
     input_window: int | None = None,
     output_window: int | None = None,
     relative: bool | None = None,
+    model_type: str | None = None,
 ) -> None:
-    """Carga el modelo, ajusta el scaler y configura los periodos de rebalanceo.
+    """Carga el modelo, ajusta el scaler (solo CNN) y configura los periodos de rebalanceo.
 
     Parameters
     ----------
-    input_window  : Tamaño de la ventana de entrada (días). Si se omite, usa
-                    CNN_INPUT_WINDOW del entorno o el valor por defecto (10).
-    output_window : Tamaño de la ventana de salida (días). Si se omite, usa
-                    CNN_OUTPUT_WINDOW del entorno o el valor por defecto (90).
-    relative      : Si True, carga el modelo entrenado con target relativo al
-                    universo (_rel). Si se omite, usa CNN_RELATIVE del entorno
-                    o False por defecto.
+    input_window  : Tamaño de la ventana de entrada (días). Por defecto CNN_INPUT_WINDOW / 10.
+    output_window : Tamaño de la ventana de salida (días). Por defecto CNN_OUTPUT_WINDOW / 90.
+    relative      : Solo aplicable al modelo CNN. Si True, carga la variante _rel.
+                    Se ignora para LSTM (no existe variante relativa).
+    model_type    : "cnn" o "lstm". Por defecto BACKTEST_MODEL / "cnn".
 
     Debe llamarse antes de usar cualquier otra función del módulo.
     Puede llamarse de nuevo con distintos parámetros para cambiar de modelo.
     """
     global model, scaler, returns_full, assets, n_assets
     global rebalance_dates, period_ends, end_of_backtest
-    global INPUT_WINDOW, OUTPUT_WINDOW, RELATIVE
+    global INPUT_WINDOW, OUTPUT_WINDOW, RELATIVE, MODEL_TYPE
 
     if input_window is not None:
         INPUT_WINDOW = input_window
@@ -107,33 +125,41 @@ def setup(
         OUTPUT_WINDOW = output_window
     if relative is not None:
         RELATIVE = relative
+    if model_type is not None:
+        MODEL_TYPE = model_type
+
+    if MODEL_TYPE not in ("cnn", "lstm"):
+        raise ValueError(f"model_type debe ser 'cnn' o 'lstm', recibido: {MODEL_TYPE!r}")
+    if MODEL_TYPE == "lstm" and RELATIVE:
+        raise ValueError("El modelo LSTM no tiene variante relativa (_rel).")
 
     # Modelo
-    suffix = "_rel" if RELATIVE else ""
-    model_path = MODELS_DIR / f"cnn_input{INPUT_WINDOW}_output{OUTPUT_WINDOW}{suffix}_model.keras"
-    train_script = f"train_cnn_in{INPUT_WINDOW}_out{OUTPUT_WINDOW}{'_rel' if RELATIVE else ''}_to2024.py"
-    if not model_path.exists():
+    path = _resolve_model_path(MODEL_TYPE, INPUT_WINDOW, OUTPUT_WINDOW, RELATIVE)
+    if not path.exists():
         raise FileNotFoundError(
-            f"Modelo no encontrado: {model_path}\n"
+            f"Modelo no encontrado: {path}\n"
             "Entrena primero con:\n"
-            f"  python backtesting/scripts/{train_script}"
+            f"  python backtesting/scripts/{_train_script_name(MODEL_TYPE, INPUT_WINDOW, OUTPUT_WINDOW, RELATIVE)}"
         )
-    model = keras.models.load_model(model_path)
-    print(f"Modelo cargado: {model_path.relative_to(PROJECT_ROOT)}")
+    model = keras.models.load_model(path)
+    print(f"Modelo cargado: {path.relative_to(PROJECT_ROOT)}")
 
-    # Scaler — replicamos exactamente el pipeline de train_cnn_window:
-    #   get_train_test (90/10) → split_train_val (retira 10 % final como val)
-    d = get_train_test(
-        input_window_size=INPUT_WINDOW,
-        output_window_size=OUTPUT_WINDOW,
-        returns_file="returns_to2024.parquet",
-        relative=RELATIVE,
-    )
-    X_train_final, _, _, _ = split_train_val(d.X_train, d.y_train)
-    n, w, a = X_train_final.shape
-    scaler = StandardScaler()
-    scaler.fit(X_train_final.reshape(n, w * a))
-    print(f"Scaler ajustado sobre {n} secuencias ({w}d × {a} activos).")
+    # Scaler — solo CNN (el LSTM fue entrenado sobre retornos crudos sin escalado)
+    if MODEL_TYPE == "cnn":
+        d = get_train_test(
+            input_window_size=INPUT_WINDOW,
+            output_window_size=OUTPUT_WINDOW,
+            returns_file="returns_to2024.parquet",
+            relative=RELATIVE,
+        )
+        X_train_final, _, _, _ = split_train_val(d.X_train, d.y_train)
+        n, w, a = X_train_final.shape
+        scaler = StandardScaler()
+        scaler.fit(X_train_final.reshape(n, w * a))
+        print(f"Scaler ajustado sobre {n} secuencias ({w}d × {a} activos).")
+    else:
+        scaler = None
+        print("LSTM: sin escalado de inputs.")
 
     # Datos completos (incluye 2025)
     returns_full = load_returns(filename="returns.parquet")
@@ -178,8 +204,9 @@ def predict_at(date: pd.Timestamp) -> np.ndarray:
     iloc = returns_full.index.get_loc(date)
     window = returns_full.iloc[iloc - INPUT_WINDOW : iloc].values
     X = window.reshape(1, INPUT_WINDOW, n_assets)
-    X_scaled = scaler.transform(X.reshape(1, -1)).reshape(1, INPUT_WINDOW, n_assets)
-    return model.predict(X_scaled, verbose=0)[0]
+    if scaler is not None:
+        X = scaler.transform(X.reshape(1, -1)).reshape(1, INPUT_WINDOW, n_assets)
+    return model.predict(X, verbose=0)[0]
 
 
 def trailing_vol(date: pd.Timestamp) -> np.ndarray:
@@ -203,18 +230,18 @@ def portfolio_log_returns(weights: dict, ret: pd.DataFrame) -> pd.Series:
 
 
 # ── Estrategias ───────────────────────────────────────────────────────────────
-def strat_cnn_equal(pred: np.ndarray, **_) -> dict:
+def strat_model_equal(pred: np.ndarray, **_) -> dict:
     top = np.argsort(pred)[::-1][:N_TOP]
     return {assets[i]: 1.0 / N_TOP for i in top}
 
 
-def strat_cnn_riskadjusted(pred: np.ndarray, vol: np.ndarray, **_) -> dict:
+def strat_model_riskadjusted(pred: np.ndarray, vol: np.ndarray, **_) -> dict:
     signal = pred / vol
     top = np.argsort(signal)[::-1][:N_TOP]
     return {assets[i]: 1.0 / N_TOP for i in top}
 
 
-def strat_cnn_threshold(pred: np.ndarray, **_) -> dict:
+def strat_model_threshold(pred: np.ndarray, **_) -> dict:
     top = np.argsort(pred)[::-1][:N_TOP]
     selected = [i for i in top if pred[i] > PRED_THRESHOLD]
     if not selected:
@@ -235,11 +262,11 @@ def strat_equalweight(**_) -> dict:
 
 
 STRATEGIES = {
-    "cnn_top4_equal":        strat_cnn_equal,
-    "cnn_top4_riskadjusted": strat_cnn_riskadjusted,
-    "cnn_top4_threshold":    strat_cnn_threshold,
-    "bench_momentum":        strat_momentum,
-    "bench_equalweight":     strat_equalweight,
+    "model_top4_equal":        strat_model_equal,
+    "model_top4_riskadjusted": strat_model_riskadjusted,
+    "model_top4_threshold":    strat_model_threshold,
+    "bench_momentum":          strat_momentum,
+    "bench_equalweight":       strat_equalweight,
 }
 
 
@@ -311,8 +338,9 @@ def compute_metrics(name: str, ret_df: pd.DataFrame, holdings: dict) -> dict:
 def save_outputs(ret_df: pd.DataFrame, holdings: dict) -> None:
     """Guarda CSV de valores, CSV de métricas y gráfico de retorno acumulado."""
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    rel_part = "_rel" if RELATIVE else ""
-    tag = f"momentum{rel_part}_in{INPUT_WINDOW}_out{OUTPUT_WINDOW}"
+    rel_part = "_rel" if (RELATIVE and MODEL_TYPE == "cnn") else ""
+    tag = f"momentum_{MODEL_TYPE}{rel_part}_in{INPUT_WINDOW}_out{OUTPUT_WINDOW}"
+    model_label = MODEL_TYPE.upper() + (" (rel)" if rel_part else "")
 
     cum_value = (np.exp(ret_df.cumsum()) * 100).round(4)
     values_path = OUTPUT_DIR / f"portfolio_values_{tag}.csv"
@@ -329,11 +357,11 @@ def save_outputs(ret_df: pd.DataFrame, holdings: dict) -> None:
     print(f"\nMétricas → {metrics_path}")
 
     STYLE = {
-        "cnn_top4_equal":        dict(color="royalblue",  lw=2,   ls="-",  label="CNN Top-4 Equal"),
-        "cnn_top4_riskadjusted": dict(color="darkorange", lw=2,   ls="-",  label="CNN Top-4 Risk-Adj."),
-        "cnn_top4_threshold":    dict(color="seagreen",   lw=2,   ls="-",  label="CNN Top-4 + Umbral"),
-        "bench_momentum":        dict(color="purple",     lw=1.5, ls="-.", label="Momentum"),
-        "bench_equalweight":     dict(color="gray",       lw=1.5, ls="--", label="Equal Weight (B&H)"),
+        "model_top4_equal":        dict(color="royalblue",  lw=2,   ls="-",  label=f"{model_label} Top-4 Equal"),
+        "model_top4_riskadjusted": dict(color="darkorange", lw=2,   ls="-",  label=f"{model_label} Top-4 Risk-Adj."),
+        "model_top4_threshold":    dict(color="seagreen",   lw=2,   ls="-",  label=f"{model_label} Top-4 + Umbral"),
+        "bench_momentum":          dict(color="purple",     lw=1.5, ls="-.", label="Momentum"),
+        "bench_equalweight":       dict(color="gray",       lw=1.5, ls="--", label="Equal Weight (B&H)"),
     }
     fig, ax = plt.subplots(figsize=(12, 6))
     for name, style in STYLE.items():
@@ -343,7 +371,7 @@ def save_outputs(ret_df: pd.DataFrame, holdings: dict) -> None:
     ax.axhline(100, color="black", lw=0.8, ls=":")
     target_label = "target relativo" if RELATIVE else "target absoluto"
     ax.set_title(
-        f"Backtesting trimestral 2025 — CNN Deep Conv1D "
+        f"Backtesting trimestral 2025 — {model_label} "
         f"(input={INPUT_WINDOW}, output={OUTPUT_WINDOW}, {target_label})",
         fontsize=13,
     )

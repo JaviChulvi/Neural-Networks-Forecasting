@@ -39,10 +39,14 @@ def load_precios_close(data_dir: str = str(DATA_DIR)) -> pd.DataFrame:
     return pd.read_parquet(Path(data_dir) / "precios_close.parquet")
 
 
-@lru_cache(maxsize=1)
-def load_returns(data_dir: str = str(DATA_DIR)) -> pd.DataFrame:
-    """Carga (y cachea) el DataFrame de retornos logarítmicos."""
-    return pd.read_parquet(Path(data_dir) / "returns.parquet")
+@lru_cache(maxsize=4)
+def load_returns(data_dir: str = str(DATA_DIR), filename: str = "returns.parquet") -> pd.DataFrame:
+    """Carga (y cachea) el DataFrame de retornos logarítmicos.
+
+    filename permite elegir el parquet a cargar, p.ej. "returns_to2024.parquet"
+    para usar solo datos hasta fin de 2024 en el backtesting.
+    """
+    return pd.read_parquet(Path(data_dir) / filename)
 
 
 def create_time_series_data(
@@ -78,6 +82,54 @@ def create_time_series_data(
         y = y_full[input_window_size : input_window_size + n_samples].mean(axis=-1)
     else:
         y = arr[input_window_size - 1 : input_window_size - 1 + n_samples].copy()
+
+    return X, y
+
+
+def create_time_series_data_relative(
+    data: pd.DataFrame | np.ndarray,
+    input_window_size: int,
+    output_window_size: int,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Igual que create_time_series_data pero y contiene retornos relativos al universo.
+
+    X: (n_samples, input_window_size, n_features)
+    y: (n_samples, n_features) — para cada muestra i y activo j:
+           y[i, j] = mean(ret[j, i+input:i+input+output])
+                     − mean_sobre_activos(mean(ret[:, i+input:i+input+output]))
+
+    Así y[i, j] > 0 indica que el activo j superó a la media del universo
+    en esa ventana de salida, lo que permite entrenar un modelo que aprenda
+    a identificar outperformers relativos en cada periodo.
+
+    Requiere output_window_size > 0.
+    """
+    if output_window_size <= 0:
+        raise ValueError("output_window_size debe ser > 0 para retornos relativos.")
+
+    arr = data.values if isinstance(data, pd.DataFrame) else np.asarray(data)
+    n_total = len(arr)
+    n_samples = n_total - input_window_size - output_window_size + 1
+    if n_samples <= 0:
+        raise ValueError(
+            f"Ventanas demasiado grandes para los datos: n_total={n_total}, "
+            f"input={input_window_size}, output={output_window_size}"
+        )
+
+    X_full = sliding_window_view(arr, window_shape=input_window_size, axis=0)
+    X = X_full[:n_samples].transpose(0, 2, 1).copy()
+
+    y_full = sliding_window_view(arr, window_shape=output_window_size, axis=0)
+    # y_abs[i, j] = media del log-return del activo j en la ventana de salida
+    y_abs = y_full[input_window_size : input_window_size + n_samples].mean(axis=-1)
+    # Paso 1: exceso cross-seccional — quita el efecto de mercado en cada muestra
+    universe_mean = y_abs.mean(axis=-1, keepdims=True)   # (n_samples, 1)
+    y_relative = y_abs - universe_mean
+    # Paso 2: quita el alpha incondicional de cada activo (media temporal por activo)
+    # Sin esto el modelo aprende "BA siempre supera al universo" y predice un ranking
+    # estático independientemente de la ventana de entrada.
+    asset_alpha = y_relative.mean(axis=0, keepdims=True)  # (1, n_assets)
+    y = (y_relative - asset_alpha).copy()
 
     return X, y
 
@@ -187,14 +239,24 @@ def get_train_test(
     test_size: float = 0.1,
     random_state: int = RANDOM_SEED,
     data_dir: str | Path = DATA_DIR,
+    returns_file: str = "returns.parquet",
+    relative: bool = False,
 ) -> TrainTestData:
     """Devuelve train/test listos para un par (input_window, output_window).
 
     Los retornos se cachean entre llamadas, así que es eficiente barrer varias
     combinaciones de ventanas en bucle.
+
+    returns_file permite elegir el parquet a cargar, p.ej. "returns_to2024.parquet"
+    para limitar los datos al periodo de entrenamiento del backtesting.
+
+    relative=True usa create_time_series_data_relative como target (exceso de
+    retorno de cada activo respecto a la media del universo en la ventana de salida).
+    relative=False (por defecto) mantiene el comportamiento original.
     """
-    returns = load_returns(str(data_dir))
-    X, y = create_time_series_data(returns, input_window_size, output_window_size)
+    returns = load_returns(str(data_dir), returns_file)
+    builder = create_time_series_data_relative if relative else create_time_series_data
+    X, y = builder(returns, input_window_size, output_window_size)
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=test_size, shuffle=False, random_state=random_state
     )

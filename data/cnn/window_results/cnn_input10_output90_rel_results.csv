@@ -1,0 +1,2 @@
+model,input_window,output_window,relative_target,MAE_train,MAE_val,MAE_test,params,epochs_trained,batch_size,learning_rate,history_path,plot_path,model_path
+CNN_Deep_Conv1D,10,90,True,0.001027600239256468,0.0007951876623471879,0.0010320330261435519,93399,35,128,0.0003,data/cnn/history/cnn_input10_output90_history.csv,data/cnn/plots/cnn_input10_output90_loss_curve.png,data/cnn/saved_models/cnn_input10_output90_rel_model.keras
