@@ -50,3 +50,5 @@ wandb/
 *.h5
 *.pkl
 *.joblib
+data/preprocessing/sequences/**/*.npz
+data/preprocessing/sequences/*.npz
