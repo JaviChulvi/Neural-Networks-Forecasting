@@ -84,22 +84,22 @@ RNN_BEST = {
 }
 
 MIXTOS_BEST = {
-    (5,  1):  {"model": "LSTM (tuned)",     "mae": 0.012232},
-    (5,  5):  {"model": "GRU (tuned)",      "mae": 0.005593},
-    (5,  30): {"model": "CNN-LSTM (tuned)", "mae": 0.002339},
-    (5,  90): {"model": "LSTM (tuned)",     "mae": 0.001275},
-    (10, 1):  {"model": "CNN-LSTM (tuned)", "mae": 0.012244},
-    (10, 5):  {"model": "CNN-GRU (tuned)",  "mae": 0.005620},
-    (10, 30): {"model": "LSTM (tuned)",     "mae": 0.002334},
-    (10, 90): {"model": "CNN-GRU (tuned)",  "mae": 0.001272},
-    (30, 1):  {"model": "Hybrid CNN-LSTM",  "mae": 0.012244},
-    (30, 5):  {"model": "Hybrid CNN-GRU",   "mae": 0.005581},
-    (30, 30): {"model": "LSTM (tuned)",     "mae": 0.002340},
-    (30, 90): {"model": "CNN-LSTM (tuned)", "mae": 0.001346},
-    (90, 1):  {"model": "CNN-LSTM (tuned)", "mae": 0.012279},
-    (90, 5):  {"model": "LSTM (tuned)",     "mae": 0.005594},
-    (90, 30): {"model": "LSTM (tuned)",     "mae": 0.002344},
-    (90, 90): {"model": "CNN-GRU (tuned)",  "mae": 0.001396},
+    (5,  1):  {"model": "CNN-MLP (tuned)",      "mae": 0.012213},
+    (5,  5):  {"model": "CNN-MLP (tuned)",      "mae": 0.005604},
+    (5,  30): {"model": "CNN-LSTM (tuned)",     "mae": 0.002339},
+    (5,  90): {"model": "CNN-LSTM-MLP (tuned)", "mae": 0.001267},
+    (10, 1):  {"model": "CNN-LSTM (tuned)",     "mae": 0.012244},
+    (10, 5):  {"model": "CNN-MLP (tuned)",      "mae": 0.005604},
+    (10, 30): {"model": "LSTM (tuned)",         "mae": 0.002334},
+    (10, 90): {"model": "LSTM (tuned)",         "mae": 0.001276},
+    (30, 1):  {"model": "Hybrid CNN-LSTM",      "mae": 0.012244},
+    (30, 5):  {"model": "Hybrid CNN-GRU",       "mae": 0.005581},
+    (30, 30): {"model": "LSTM (tuned)",         "mae": 0.002340},
+    (30, 90): {"model": "CNN-LSTM (tuned)",     "mae": 0.001346},
+    (90, 1):  {"model": "CNN-MLP (tuned)",      "mae": 0.012273},
+    (90, 5):  {"model": "LSTM (tuned)",         "mae": 0.005594},
+    (90, 30): {"model": "CNN-MLP (tuned)",      "mae": 0.002358},
+    (90, 90): {"model": "CNN-GRU (tuned)",      "mae": 0.001396},
 }
 
 FAMILIES = {
