@@ -19,12 +19,12 @@ Yahoo Finance does not provide transaction-level trades in this dataset. Therefo
 
 ## Summary
 
-| bar_type   | description                                               | threshold_type   |    threshold |   n_bars | start_date          | end_date            |   mean_days_per_bar |   median_days_per_bar |   mean_abs_return |   return_std |   return_skew |   return_kurtosis |
-|:-----------|:----------------------------------------------------------|:-----------------|-------------:|---------:|:--------------------|:--------------------|--------------------:|----------------------:|------------------:|-------------:|--------------:|------------------:|
-| time       | Daily time bars                                           | calendar_day     |  1           |    16196 | 1962-01-02 00:00:00 | 2026-05-08 00:00:00 |             1.45119 |                     1 |         0.0116184 |    0.0171395 |     -0.396926 |          19.3299  |
-| count      | Count bars: proxy for tick bars using daily observations  | n_days           | 16           |     1013 | 1962-01-23 00:00:00 | 2026-05-08 00:00:00 |            23.2026  |                    23 |         0.0481764 |    0.0673803 |     -0.69798  |           8.25252 |
-| volume     | Daily volume bars using aggregated universe volume        | total_volume     |  1.69751e+09 |      953 | 1962-07-10 00:00:00 | 2026-05-08 00:00:00 |            24.4884  |                    18 |         0.0475594 |    0.0701738 |     -0.391259 |          12.8745  |
-| dollar     | Daily dollar bars using aggregated universe dollar volume | total_dollar     |  6.10113e+10 |      913 | 1981-01-06 00:00:00 | 2026-05-08 00:00:00 |            18.1557  |                    10 |         0.0369666 |    0.06197   |      1.4699   |          24.2265  |
+| bar_type   | description                                               | threshold_type   |   threshold |   n_bars | start_date          | end_date            |   mean_days_per_bar |   median_days_per_bar |   mean_abs_return |   return_std |   return_skew |   return_kurtosis |
+|:-----------|:----------------------------------------------------------|:-----------------|------------:|---------:|:--------------------|:--------------------|--------------------:|----------------------:|------------------:|-------------:|--------------:|------------------:|
+| time       | Daily time bars                                           | calendar_day     | 1           |    16196 | 1962-01-02 00:00:00 | 2026-05-08 00:00:00 |             1.45119 |                     1 |         0.0116184 |    0.0171395 |     -0.396927 |          19.3299  |
+| count      | Count bars: proxy for tick bars using daily observations  | n_days           | 4           |     4049 | 1962-01-05 00:00:00 | 2026-05-08 00:00:00 |             5.80509 |                     6 |         0.0242089 |    0.0345307 |     -0.32274  |           8.04026 |
+| volume     | Daily volume bars using aggregated universe volume        | total_volume     | 4.24378e+08 |     3369 | 1962-03-01 00:00:00 | 2026-05-08 00:00:00 |             6.96081 |                     5 |         0.0251991 |    0.0372088 |     -0.299662 |          11.9418  |
+| dollar     | Daily dollar bars using aggregated universe dollar volume | total_dollar     | 1.52528e+10 |     2986 | 1972-11-03 00:00:00 | 2026-05-08 00:00:00 |             6.5474  |                     3 |         0.0205583 |    0.0355322 |      1.87298  |          65.805   |
 
 ## Output files
 
