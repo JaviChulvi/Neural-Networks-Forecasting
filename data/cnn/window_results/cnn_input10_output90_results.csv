@@ -1,2 +1,2 @@
-model,input_window,output_window,MAE_train,MAE_val,MAE_test,params,epochs_trained,batch_size,learning_rate,history_path,plot_path,model_path
-CNN_Deep_Conv1D,10,90,0.00127423770758183,0.0009005107076386696,0.0012354217859752374,93399,35,128,0.0003,data/cnn/history/cnn_input10_output90_history.csv,data/cnn/plots/cnn_input10_output90_loss_curve.png,data/cnn/saved_models/cnn_input10_output90_model.keras
+model,input_window,output_window,relative_target,MAE_train,MAE_val,MAE_test,params,epochs_trained,batch_size,learning_rate,history_path,plot_path,model_path
+CNN_Deep_Conv1D,10,90,False,0.00127423770758183,0.0009005107076386696,0.0012354217859752374,93399,35,128,0.0003,data/cnn/history/cnn_input10_output90_history.csv,data/cnn/plots/cnn_input10_output90_loss_curve.png,data/cnn/saved_models/cnn_input10_output90_model.keras

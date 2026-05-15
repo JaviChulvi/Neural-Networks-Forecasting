@@ -17,9 +17,13 @@ El modelo queda guardado en:
 AVISO: sobreescribe el modelo guardado por el notebook original si existe.
 Si necesitas conservar ambos, renombra el fichero .keras antes de ejecutar.
 
-Uso:
+Uso desde terminal:
     python backtesting/scripts/train_lstm_in10_out90_to2024.py
     LSTM_EPOCHS=300 python backtesting/scripts/train_lstm_in10_out90_to2024.py
+
+Uso desde otro script o notebook:
+    from backtesting.scripts.train_lstm_in10_out90_to2024 import run
+    row = run(epochs=300)
 """
 
 import os
@@ -46,70 +50,99 @@ LSTM_LAYERS  = 2
 UNITS        = 128
 DROPOUT      = 0.0
 LR           = 1e-4
-BATCH_SIZE   = int(os.getenv("LSTM_BATCH_SIZE", "128"))
-EPOCHS       = int(os.getenv("LSTM_EPOCHS", "200"))
 PATIENCE     = 10
 RETURNS_FILE = "returns_to2024.parquet"
 
-# ── datos ──────────────────────────────────────────────────────────────────
-print(f"Cargando datos desde {RETURNS_FILE} ...")
-d = get_train_test(
-    input_window_size=INPUT_W,
-    output_window_size=OUTPUT_W,
-    returns_file=RETURNS_FILE,
-)
 
-val_size  = int(0.10 * d.X_train.shape[0])
-X_val     = d.X_train[-val_size:]
-y_val     = d.y_train[-val_size:]
-X_train   = d.X_train[:-val_size]
-y_train   = d.y_train[:-val_size]
-X_test    = d.X_test
-y_test    = d.y_test
+def run(
+    epochs: int = int(os.getenv("LSTM_EPOCHS", "200")),
+    batch_size: int = int(os.getenv("LSTM_BATCH_SIZE", "128")),
+    bar_type: str | None = None,
+    preprocessing_dir: Path | None = None,
+) -> dict:
+    """Entrena el LSTM (input=10, output=90) sobre returns_to2024.parquet.
 
-print(f"X_train: {X_train.shape}  X_val: {X_val.shape}  X_test: {X_test.shape}")
+    bar_type ("time", "count", "volume", "dollar") carga los NPZ pre-generados
+    por 03_build_preprocessed_sequences.py en lugar del parquet original.
+    preprocessing_dir permite sobreescribir la ruta base de los NPZ.
 
-# ── modelo ─────────────────────────────────────────────────────────────────
-np.random.seed(RANDOM_SEED)
-keras.utils.set_random_seed(RANDOM_SEED)
+    Returns:
+        dict con MAE train/val/test, épocas entrenadas, nº parámetros y ruta del modelo.
+    """
+    if bar_type is not None:
+        print(f"Cargando datos desde NPZ — bar_type={bar_type} ...")
+    else:
+        print(f"Cargando datos desde {RETURNS_FILE} ...")
+    d = get_train_test(
+        input_window_size=INPUT_W,
+        output_window_size=OUTPUT_W,
+        returns_file=RETURNS_FILE,
+        bar_type=bar_type,
+        preprocessing_dir=preprocessing_dir,
+    )
 
-model = Sequential()
-model.add(Input(shape=(X_train.shape[1], X_train.shape[2])))
-for i in range(LSTM_LAYERS):
-    return_seq = (i < LSTM_LAYERS - 1)
-    model.add(LSTM(UNITS, return_sequences=return_seq, dropout=DROPOUT))
-model.add(Dense(y_train.shape[1]))
-model.compile(loss="mean_absolute_error", optimizer=Adam(learning_rate=LR))
-model.summary()
+    val_size  = int(0.10 * d.X_train.shape[0])
+    X_val     = d.X_train[-val_size:]
+    y_val     = d.y_train[-val_size:]
+    X_train   = d.X_train[:-val_size]
+    y_train   = d.y_train[:-val_size]
+    X_test    = d.X_test
+    y_test    = d.y_test
 
-# ── entrenamiento ──────────────────────────────────────────────────────────
-es = EarlyStopping(monitor="val_loss", patience=PATIENCE, restore_best_weights=True)
-history = model.fit(
-    X_train, y_train,
-    validation_data=(X_val, y_val),
-    epochs=EPOCHS,
-    batch_size=BATCH_SIZE,
-    callbacks=[es],
-)
+    print(f"X_train: {X_train.shape}  X_val: {X_val.shape}  X_test: {X_test.shape}")
 
-# ── evaluación ─────────────────────────────────────────────────────────────
-mae_train = mean_absolute_error(y_train, model.predict(X_train, verbose=0))
-mae_val   = mean_absolute_error(y_val,   model.predict(X_val,   verbose=0))
-mae_test  = mean_absolute_error(y_test,  model.predict(X_test,  verbose=0))
+    np.random.seed(RANDOM_SEED)
+    keras.utils.set_random_seed(RANDOM_SEED)
 
-print("\nResultados:")
-print(f"  MAE train : {mae_train:.6f}")
-print(f"  MAE val   : {mae_val:.6f}")
-print(f"  MAE test  : {mae_test:.6f}")
-print(f"  épocas    : {len(history.history['loss'])}")
-print(f"  parámetros: {model.count_params()}")
+    model = Sequential()
+    model.add(Input(shape=(X_train.shape[1], X_train.shape[2])))
+    for i in range(LSTM_LAYERS):
+        return_seq = (i < LSTM_LAYERS - 1)
+        model.add(LSTM(UNITS, return_sequences=return_seq, dropout=DROPOUT))
+    model.add(Dense(y_train.shape[1]))
+    model.compile(loss="mean_absolute_error", optimizer=Adam(learning_rate=LR))
+    model.summary()
 
-# ── guardado ───────────────────────────────────────────────────────────────
-model_dir  = PROJECT_ROOT / "data" / "rnn" / "saved_models"
-model_dir.mkdir(parents=True, exist_ok=True)
-model_path = model_dir / f"rnn_lstm_input{INPUT_W}_output{OUTPUT_W}_model.keras"
-model.save(model_path)
+    es = EarlyStopping(monitor="val_loss", patience=PATIENCE, restore_best_weights=True)
+    history = model.fit(
+        X_train, y_train,
+        validation_data=(X_val, y_val),
+        epochs=epochs,
+        batch_size=batch_size,
+        callbacks=[es],
+    )
 
-print(f"\nModelo guardado en: {model_path}")
-print("Para cargar en backtesting:")
-print(f"  model = keras.models.load_model(r'{model_path}')")
+    mae_train = mean_absolute_error(y_train, model.predict(X_train, verbose=0))  # type: ignore[arg-type]
+    mae_val   = mean_absolute_error(y_val,   model.predict(X_val,   verbose=0))  # type: ignore[arg-type]
+    mae_test  = mean_absolute_error(y_test,  model.predict(X_test,  verbose=0))  # type: ignore[arg-type]
+
+    model_dir  = PROJECT_ROOT / "data" / "rnn" / "saved_models"
+    model_dir.mkdir(parents=True, exist_ok=True)
+    bar_suffix = f"_{bar_type}" if bar_type is not None else ""
+    model_path = model_dir / f"rnn_lstm_input{INPUT_W}_output{OUTPUT_W}{bar_suffix}_model.keras"
+    model.save(model_path)
+
+    return {
+        "mae_train": mae_train,
+        "mae_val": mae_val,
+        "mae_test": mae_test,
+        "epochs_trained": len(history.history["loss"]),
+        "n_params": model.count_params(),
+        "model_path": str(model_path.relative_to(PROJECT_ROOT)),
+    }
+
+
+if __name__ == "__main__":
+    row = run()
+
+    print("\nResultados:")
+    print(f"  MAE train : {row['mae_train']:.6f}")
+    print(f"  MAE val   : {row['mae_val']:.6f}")
+    print(f"  MAE test  : {row['mae_test']:.6f}")
+    print(f"  épocas    : {row['epochs_trained']}")
+    print(f"  parámetros: {row['n_params']}")
+
+    model_path = PROJECT_ROOT / row["model_path"]
+    print(f"\nModelo guardado en: {model_path}")
+    print("Para cargar en backtesting:")
+    print(f"  model = keras.models.load_model(r'{model_path}')")

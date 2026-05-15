@@ -87,23 +87,59 @@ rebalance_dates: Any
 period_ends: Any
 end_of_backtest: Any
 relative: Any
+BAR_TYPE: Any        # str | None — tipo de bars usado; None = comportamiento original
+PREPROCESSING_DIR: Any  # Path | None — ruta base de los NPZ
 
 
-def _resolve_model_path(mtype: str, in_w: int, out_w: int, rel: bool) -> Path:
+def _resolve_model_path(mtype: str, in_w: int, out_w: int, rel: bool, bar_type: str | None = None) -> Path:
+    bar_suffix = f"_{bar_type}" if bar_type is not None else ""
     if mtype == "cnn":
         from cnn_utils import MODELS_DIR as CNN_MODELS_DIR
-        suffix = "_rel" if rel else ""
-        return CNN_MODELS_DIR / f"cnn_input{in_w}_output{out_w}{suffix}_model.keras"
+        rel_suffix = "_rel" if rel else ""
+        return CNN_MODELS_DIR / f"cnn_input{in_w}_output{out_w}{bar_suffix}{rel_suffix}_model.keras"
     # lstm o gru — misma convención de nombres
-    return RNN_MODELS_DIR / f"rnn_{mtype}_input{in_w}_output{out_w}_model.keras"
+    return RNN_MODELS_DIR / f"rnn_{mtype}_input{in_w}_output{out_w}{bar_suffix}_model.keras"
 
 
-def _train_script_name(mtype: str, in_w: int, out_w: int, rel: bool) -> str:
-    if mtype == "lstm":
-        return f"train_lstm_in{in_w}_out{out_w}_to2024.py"
-    if mtype == "gru":
-        return f"model/rnn/gru/hp_search_input{in_w}_output{out_w}.ipynb  (celda 'Guardado del modelo tuneado')"
-    return f"train_cnn_in{in_w}_out{out_w}{'_rel' if rel else ''}_to2024.py"
+# Mapeo (model_type, input_window, output_window, relative) → nombre de módulo de entrenamiento.
+# Añade aquí nuevas combinaciones cuando se cree el script correspondiente.
+TRAIN_SCRIPTS: dict[tuple[str, int, int, bool], str] = {
+    ("cnn",  10, 90, False): "train_cnn_in10_out90_to2024",
+    ("cnn",  10, 90, True):  "train_cnn_in10_out90_rel_to2024",
+    ("cnn",  30, 90, False): "train_cnn_in30_out90_to2024",
+    ("lstm", 10, 90, False): "train_lstm_in10_out90_to2024",
+    ("lstm", 30, 90, False): "train_lstm_in30_out90_to2024",
+    ("gru",  10, 90, False): "train_gru_in10_out90_to2024",
+}
+
+
+def _auto_train(
+    mtype: str,
+    in_w: int,
+    out_w: int,
+    rel: bool,
+    bar_type: str | None = None,
+    preprocessing_dir: Path | None = None,
+) -> None:
+    """Importa y llama run() del script de entrenamiento correspondiente."""
+    import importlib
+
+    key = (mtype, in_w, out_w, rel)
+    module_name = TRAIN_SCRIPTS.get(key)
+    if module_name is None:
+        raise FileNotFoundError(
+            f"Modelo no encontrado y no hay script de entrenamiento registrado para "
+            f"model={mtype!r}, input={in_w}, output={out_w}, relative={rel}.\n"
+            "Entrena el modelo manualmente y vuelve a llamar setup()."
+        )
+
+    scripts_dir = str(PROJECT_ROOT / "backtesting" / "scripts")
+    if scripts_dir not in sys.path:
+        sys.path.insert(0, scripts_dir)
+
+    print(f"Modelo no encontrado. Entrenando con {module_name}.run() ...")
+    train_module = importlib.import_module(module_name)
+    train_module.run(bar_type=bar_type, preprocessing_dir=preprocessing_dir)
 
 
 # ── Setup ─────────────────────────────────────────────────────────────────────
@@ -112,23 +148,29 @@ def setup(
     output_window: int | None = None,
     relative: bool | None = None,
     model_type: str | None = None,
+    bar_type: str | None = None,
+    preprocessing_dir: Path | None = None,
 ) -> None:
     """Carga el modelo, ajusta el scaler (solo CNN) y configura los periodos de rebalanceo.
 
     Parameters
     ----------
-    input_window  : Tamaño de la ventana de entrada (días). Por defecto CNN_INPUT_WINDOW / 10.
-    output_window : Tamaño de la ventana de salida (días). Por defecto CNN_OUTPUT_WINDOW / 90.
-    relative      : Solo aplicable al modelo CNN. Si True, carga la variante _rel.
-                    Se ignora para LSTM y GRU (no existe variante relativa).
-    model_type    : "cnn", "lstm" o "gru". Por defecto BACKTEST_MODEL / "cnn".
+    input_window       : Tamaño de la ventana de entrada (días). Por defecto CNN_INPUT_WINDOW / 10.
+    output_window      : Tamaño de la ventana de salida (días). Por defecto CNN_OUTPUT_WINDOW / 90.
+    relative           : Solo aplicable al modelo CNN. Si True, carga la variante _rel.
+                         Se ignora para LSTM y GRU (no existe variante relativa).
+    model_type         : "cnn", "lstm" o "gru". Por defecto BACKTEST_MODEL / "cnn".
+    bar_type           : "time", "count", "volume" o "dollar". Si se indica, carga los NPZ
+                         pre-generados por 03_build_preprocessed_sequences.py en lugar del
+                         parquet original. None usa el comportamiento original.
+    preprocessing_dir  : Ruta base de los NPZ. Solo relevante si bar_type no es None.
 
     Debe llamarse antes de usar cualquier otra función del módulo.
     Puede llamarse de nuevo con distintos parámetros para cambiar de modelo.
     """
     global model, scaler, returns_full, assets, n_assets
     global rebalance_dates, period_ends, end_of_backtest
-    global INPUT_WINDOW, OUTPUT_WINDOW, RELATIVE, MODEL_TYPE
+    global INPUT_WINDOW, OUTPUT_WINDOW, RELATIVE, MODEL_TYPE, BAR_TYPE, PREPROCESSING_DIR
 
     if input_window is not None:
         INPUT_WINDOW = input_window
@@ -138,6 +180,8 @@ def setup(
         RELATIVE = relative
     if model_type is not None:
         MODEL_TYPE = model_type
+    BAR_TYPE = bar_type
+    PREPROCESSING_DIR = preprocessing_dir
 
     if MODEL_TYPE not in ("cnn", "lstm", "gru"):
         raise ValueError(
@@ -148,14 +192,9 @@ def setup(
             f"El modelo {MODEL_TYPE.upper()} no tiene variante relativa (_rel)."
         )
 
-    # Modelo
-    path = _resolve_model_path(MODEL_TYPE, INPUT_WINDOW, OUTPUT_WINDOW, RELATIVE)
-    if not path.exists():
-        raise FileNotFoundError(
-            f"Modelo no encontrado: {path}\n"
-            "Entrena primero con:\n"
-            f"  {_train_script_name(MODEL_TYPE, INPUT_WINDOW, OUTPUT_WINDOW, RELATIVE)}"
-        )
+    # Modelo — se reentrena siempre para garantizar que solo usa datos previos a 2025
+    path = _resolve_model_path(MODEL_TYPE, INPUT_WINDOW, OUTPUT_WINDOW, RELATIVE, BAR_TYPE)
+    _auto_train(MODEL_TYPE, INPUT_WINDOW, OUTPUT_WINDOW, RELATIVE, BAR_TYPE, PREPROCESSING_DIR)
     model = keras.models.load_model(path)
     print(f"Modelo cargado: {path.relative_to(PROJECT_ROOT)}")
 
@@ -167,6 +206,8 @@ def setup(
             output_window_size=OUTPUT_WINDOW,
             returns_file="returns_to2024.parquet",
             relative=RELATIVE,
+            bar_type=BAR_TYPE,
+            preprocessing_dir=PREPROCESSING_DIR,
         )
         X_train_final, _, _, _ = split_train_val(d.X_train, d.y_train)
         n, w, a = X_train_final.shape
@@ -389,8 +430,9 @@ def save_outputs(ret_df: pd.DataFrame, holdings: dict) -> None:
     """Guarda CSV de valores, CSV de métricas y gráfico de retorno acumulado."""
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     rel_part = "_rel" if (RELATIVE and MODEL_TYPE == "cnn") else ""
-    tag = f"momentum_{MODEL_TYPE}{rel_part}_in{INPUT_WINDOW}_out{OUTPUT_WINDOW}"
-    model_label = MODEL_TYPE.upper() + (" (rel)" if rel_part else "")
+    bar_part = f"_{BAR_TYPE}" if BAR_TYPE is not None else ""
+    tag = f"momentum_{MODEL_TYPE}{bar_part}{rel_part}_in{INPUT_WINDOW}_out{OUTPUT_WINDOW}"
+    model_label = MODEL_TYPE.upper() + (f" ({BAR_TYPE})" if BAR_TYPE else "") + (" (rel)" if rel_part else "")
 
     cum_value = (np.exp(ret_df.cumsum()) * 100).round(4)
     values_path = OUTPUT_DIR / f"portfolio_values_{tag}.csv"

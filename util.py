@@ -233,6 +233,34 @@ def plot_benchmark_comparison(
     return fig
 
 
+def get_train_test_bars(
+    bar_type: str,
+    input_window_size: int,
+    output_window_size: int,
+    preprocessing_dir: str | Path = DATA_DIR / "preprocessing",
+) -> TrainTestData:
+    """Carga train/test desde los NPZ pre-generados por 03_build_preprocessed_sequences.
+
+    Requiere haber ejecutado ese script antes. El split y las secuencias son
+    exactamente los mismos que se guardaron en disco.
+    """
+    path = (
+        Path(preprocessing_dir)
+        / "sequences"
+        / bar_type
+        / f"{bar_type}_input{input_window_size}_output{output_window_size}.npz"
+    )
+    if not path.exists():
+        raise FileNotFoundError(
+            f"No existe el fichero de secuencias para bar_type='{bar_type}', "
+            f"input={input_window_size}, output={output_window_size}.\n"
+            f"Ruta esperada: {path}\n"
+            f"Ejecuta primero 03_build_preprocessed_sequences.py."
+        )
+    d = np.load(path, allow_pickle=False)
+    return TrainTestData(d["X_train"], d["y_train"], d["X_test"], d["y_test"])
+
+
 def get_train_test(
     input_window_size: int,
     output_window_size: int,
@@ -241,19 +269,27 @@ def get_train_test(
     data_dir: str | Path = DATA_DIR,
     returns_file: str = "returns.parquet",
     relative: bool = False,
+    bar_type: str | None = None,
+    preprocessing_dir: str | Path | None = None,
 ) -> TrainTestData:
     """Devuelve train/test listos para un par (input_window, output_window).
 
+    Por defecto carga returns.parquet y construye las secuencias on-demand
+    (comportamiento original, retrocompatible).
+
+    Si se pasa bar_type ("time", "count", "volume", "dollar"), delega a
+    get_train_test_bars y carga los NPZ pre-generados por
+    03_build_preprocessed_sequences.py. En ese caso returns_file y relative
+    se ignoran. preprocessing_dir permite sobreescribir la ruta base de los NPZ
+    (por defecto DATA_DIR / "preprocessing").
+
     Los retornos se cachean entre llamadas, así que es eficiente barrer varias
     combinaciones de ventanas en bucle.
-
-    returns_file permite elegir el parquet a cargar, p.ej. "returns_to2024.parquet"
-    para limitar los datos al periodo de entrenamiento del backtesting.
-
-    relative=True usa create_time_series_data_relative como target (exceso de
-    retorno de cada activo respecto a la media del universo en la ventana de salida).
-    relative=False (por defecto) mantiene el comportamiento original.
     """
+    if bar_type is not None:
+        base = preprocessing_dir if preprocessing_dir is not None else Path(data_dir) / "preprocessing"
+        return get_train_test_bars(bar_type, input_window_size, output_window_size, base)
+
     returns = load_returns(str(data_dir), returns_file)
     builder = create_time_series_data_relative if relative else create_time_series_data
     X, y = builder(returns, input_window_size, output_window_size)

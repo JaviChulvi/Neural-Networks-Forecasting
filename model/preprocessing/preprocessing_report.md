@@ -86,3 +86,4 @@ Yahoo Finance does not provide transaction-level data in this setup. Therefore, 
 The activity bars are built on a common multi-asset calendar. This keeps the resulting matrices compatible with the multivariate forecasting setup, but it is an approximation: each asset does not receive its own independent activity clock.
 
 <!-- PREPROCESSED_SEQUENCES_SECTION_END -->
+

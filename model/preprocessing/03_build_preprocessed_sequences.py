@@ -115,7 +115,7 @@ def main():
                         idx,
                         test_size=0.10,
                         random_state=RANDOM_SEED,
-                        shuffle=True,
+                        shuffle=False,  # No shuffling to preserve temporal order
                     )
 
                     X_train, X_test = X[train_idx], X[test_idx]

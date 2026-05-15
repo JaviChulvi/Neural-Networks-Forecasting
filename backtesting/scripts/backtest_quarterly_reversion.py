@@ -102,12 +102,38 @@ def _resolve_model_path(mtype: str, in_w: int, out_w: int, rel: bool) -> Path:
     return RNN_MODELS_DIR / f"rnn_{mtype}_input{in_w}_output{out_w}_model.keras"
 
 
-def _train_script_name(mtype: str, in_w: int, out_w: int, rel: bool) -> str:
-    if mtype == "lstm":
-        return f"train_lstm_in{in_w}_out{out_w}_to2024.py"
-    if mtype == "gru":
-        return f"train_gru_in{in_w}_out{out_w}_to2024.py"
-    return f"train_cnn_in{in_w}_out{out_w}{'_rel' if rel else ''}_to2024.py"
+# Mapeo (model_type, input_window, output_window, relative) → nombre de módulo de entrenamiento.
+# Añade aquí nuevas combinaciones cuando se cree el script correspondiente.
+TRAIN_SCRIPTS: dict[tuple[str, int, int, bool], str] = {
+    ("cnn",  10, 90, False): "train_cnn_in10_out90_to2024",
+    ("cnn",  10, 90, True):  "train_cnn_in10_out90_rel_to2024",
+    ("cnn",  30, 90, False): "train_cnn_in30_out90_to2024",
+    ("lstm", 10, 90, False): "train_lstm_in10_out90_to2024",
+    ("lstm", 30, 90, False): "train_lstm_in30_out90_to2024",
+    ("gru",  10, 90, False): "train_gru_in10_out90_to2024",
+}
+
+
+def _auto_train(mtype: str, in_w: int, out_w: int, rel: bool) -> None:
+    """Importa y llama run() del script de entrenamiento correspondiente."""
+    import importlib
+
+    key = (mtype, in_w, out_w, rel)
+    module_name = TRAIN_SCRIPTS.get(key)
+    if module_name is None:
+        raise FileNotFoundError(
+            f"Modelo no encontrado y no hay script de entrenamiento registrado para "
+            f"model={mtype!r}, input={in_w}, output={out_w}, relative={rel}.\n"
+            "Entrena el modelo manualmente y vuelve a llamar setup()."
+        )
+
+    scripts_dir = str(PROJECT_ROOT / "backtesting" / "scripts")
+    if scripts_dir not in sys.path:
+        sys.path.insert(0, scripts_dir)
+
+    print(f"Entrenando con {module_name}.run() ...")
+    train_module = importlib.import_module(module_name)
+    train_module.run()
 
 
 # ── Setup ─────────────────────────────────────────────────────────────────────
@@ -154,12 +180,7 @@ def setup(
 
     # Modelo
     path = _resolve_model_path(MODEL_TYPE, INPUT_WINDOW, OUTPUT_WINDOW, RELATIVE)
-    if not path.exists():
-        raise FileNotFoundError(
-            f"Modelo no encontrado: {path}\n"
-            "Entrena primero con:\n"
-            f"  {_train_script_name(MODEL_TYPE, INPUT_WINDOW, OUTPUT_WINDOW, RELATIVE)}"
-        )
+    _auto_train(MODEL_TYPE, INPUT_WINDOW, OUTPUT_WINDOW, RELATIVE)
     model = keras.models.load_model(path)
     print(f"Modelo cargado: {path.relative_to(PROJECT_ROOT)}")
 

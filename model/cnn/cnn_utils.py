@@ -4,7 +4,7 @@ os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "2")
 import sys
 from pathlib import Path
 
-PROJECT_ROOT = Path.cwd().resolve()
+PROJECT_ROOT = Path(__file__).resolve()
 if not (PROJECT_ROOT / "util.py").exists():
     PROJECT_ROOT = next(p for p in PROJECT_ROOT.parents if (p / "util.py").exists())
 
@@ -150,8 +150,20 @@ def save_history_and_plot(history, input_window, output_window):
     return history_path, plot_path
 
 
-def train_cnn_window(input_window, output_window, epochs=120, batch_size=128, force=False, returns_file="returns.parquet", relative=False):
-    suffix = "_rel" if relative else ""
+def train_cnn_window(
+    input_window,
+    output_window,
+    epochs=120,
+    batch_size=128,
+    force=False,
+    returns_file="returns.parquet",
+    relative=False,
+    bar_type: str | None = None,
+    preprocessing_dir: Path | None = None,
+):
+    bar_suffix = f"_{bar_type}" if bar_type is not None else ""
+    rel_suffix = "_rel" if relative else ""
+    suffix = f"{bar_suffix}{rel_suffix}"
     result_path = RESULTS_DIR / f"cnn_input{input_window}_output{output_window}{suffix}_results.csv"
 
     if result_path.exists() and not force:
@@ -160,7 +172,7 @@ def train_cnn_window(input_window, output_window, epochs=120, batch_size=128, fo
 
     print("")
     print("=" * 80)
-    print(f"Training CNN Deep Conv1D | input={input_window} | output={output_window} | relative={relative}")
+    print(f"Training CNN Deep Conv1D | input={input_window} | output={output_window} | bar_type={bar_type} | relative={relative}")
     print("=" * 80)
 
     K.clear_session()
@@ -171,6 +183,8 @@ def train_cnn_window(input_window, output_window, epochs=120, batch_size=128, fo
         output_window_size=output_window,
         returns_file=returns_file,
         relative=relative,
+        bar_type=bar_type,
+        preprocessing_dir=preprocessing_dir,
     )
 
     X_train_raw, y_train_raw = d.X_train, d.y_train
@@ -219,6 +233,7 @@ def train_cnn_window(input_window, output_window, epochs=120, batch_size=128, fo
         "model": "CNN_Deep_Conv1D",
         "input_window": input_window,
         "output_window": output_window,
+        "bar_type": bar_type if bar_type is not None else "time",
         "relative_target": relative,
         "MAE_train": mae_train,
         "MAE_val": mae_val,
@@ -242,6 +257,7 @@ def train_cnn_window(input_window, output_window, epochs=120, batch_size=128, fo
             "model": "CNN_Deep_Conv1D",
             "input_window": input_window,
             "output_window": output_window,
+            "bar_type": bar_type if bar_type is not None else "time",
             "relative_target": relative,
             "batch_size": batch_size,
             "learning_rate": 3e-4,
