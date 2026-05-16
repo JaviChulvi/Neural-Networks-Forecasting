@@ -261,6 +261,43 @@ def get_train_test_bars(
     return TrainTestData(d["X_train"], d["y_train"], d["X_test"], d["y_test"])
 
 
+def get_train_test_bars_ffd(
+    bar_type: str,
+    input_window_size: int,
+    output_window_size: int,
+    preprocessing_dir: str | Path = DATA_DIR / "preprocessing",
+) -> TrainTestData:
+    """Carga train/test desde los NPZ de diferenciación fraccional pre-generados por
+    04_build_ffd_sequences.py.
+
+    bar_type puede ser "time", "count", "volume", "dollar" o "raw" (precios
+    originales sin agregación de barras).
+    """
+    path = (
+        Path(preprocessing_dir)
+        / "sequences_ffd"
+        / bar_type
+        / f"{bar_type}_ffd_input{input_window_size}_output{output_window_size}.npz"
+    )
+    if not path.exists():
+        raise FileNotFoundError(
+            f"No existe el fichero FFD para bar_type='{bar_type}', "
+            f"input={input_window_size}, output={output_window_size}.\n"
+            f"Ruta esperada: {path}\n"
+            f"Ejecuta primero 04_build_ffd_sequences.py."
+        )
+    d = np.load(path, allow_pickle=False)
+    X_train, y_train = d["X_train"], d["y_train"]
+    X_test, y_test = d["X_test"], d["y_test"]
+
+    # FFD deja NaN al inicio de cada serie cuando activos tienen d distinto;
+    # filtramos las muestras afectadas para no propagar NaN al entrenamiento.
+    train_mask = ~(np.isnan(X_train).any(axis=(1, 2)) | np.isnan(y_train).any(axis=1))
+    test_mask = ~(np.isnan(X_test).any(axis=(1, 2)) | np.isnan(y_test).any(axis=1))
+    return TrainTestData(X_train[train_mask], y_train[train_mask],
+                         X_test[test_mask], y_test[test_mask])
+
+
 def get_train_test(
     input_window_size: int,
     output_window_size: int,
@@ -271,23 +308,32 @@ def get_train_test(
     relative: bool = False,
     bar_type: str | None = None,
     preprocessing_dir: str | Path | None = None,
+    ffd: bool = False,
 ) -> TrainTestData:
     """Devuelve train/test listos para un par (input_window, output_window).
 
-    Por defecto carga returns.parquet y construye las secuencias on-demand
-    (comportamiento original, retrocompatible).
+    Modos de uso:
+    - Por defecto (ffd=False, bar_type=None): carga returns.parquet y construye
+      las secuencias on-demand (comportamiento original, retrocompatible).
+    - bar_type != None, ffd=False: delega a get_train_test_bars y carga los NPZ
+      de retornos logarítmicos generados por 03_build_preprocessed_sequences.py.
+    - ffd=True: delega a get_train_test_bars_ffd y carga los NPZ de
+      diferenciación fraccional generados por 04_build_ffd_sequences.py.
+      Si bar_type es None se usa "raw" (precios originales sin barras).
 
-    Si se pasa bar_type ("time", "count", "volume", "dollar"), delega a
-    get_train_test_bars y carga los NPZ pre-generados por
-    03_build_preprocessed_sequences.py. En ese caso returns_file y relative
-    se ignoran. preprocessing_dir permite sobreescribir la ruta base de los NPZ
+    preprocessing_dir sobreescribe la ruta base de los NPZ
     (por defecto DATA_DIR / "preprocessing").
 
     Los retornos se cachean entre llamadas, así que es eficiente barrer varias
     combinaciones de ventanas en bucle.
     """
+    base = preprocessing_dir if preprocessing_dir is not None else Path(data_dir) / "preprocessing"
+
+    if ffd:
+        effective_bar_type = bar_type if bar_type is not None else "raw"
+        return get_train_test_bars_ffd(effective_bar_type, input_window_size, output_window_size, base)
+
     if bar_type is not None:
-        base = preprocessing_dir if preprocessing_dir is not None else Path(data_dir) / "preprocessing"
         return get_train_test_bars(bar_type, input_window_size, output_window_size, base)
 
     returns = load_returns(str(data_dir), returns_file)
@@ -297,6 +343,66 @@ def get_train_test(
         X, y, test_size=test_size, shuffle=False, random_state=random_state
     )
     return TrainTestData(X_train, y_train, X_test, y_test)
+
+# ── FFD utilities for inference ──────────────────────────────────────────────
+
+FFD_WEIGHT_THRESHOLD: float = 1e-5
+
+
+def get_weights_ffd(d: float, thres: float = FFD_WEIGHT_THRESHOLD) -> np.ndarray:
+    """Compute FFD weights until |weight| < thres (fixed-width window)."""
+    w, k = [1.0], 1
+    while True:
+        w_ = -w[-1] / k * (d - k + 1)
+        if abs(w_) < thres:
+            break
+        w.append(w_)
+        k += 1
+    return np.array(w[::-1], dtype=np.float64)
+
+
+def apply_ffd_1d(values: np.ndarray, w: np.ndarray) -> np.ndarray:
+    """Apply FFD weights to a 1-D array (vectorised sliding window)."""
+    from numpy.lib.stride_tricks import as_strided
+    width = len(w)
+    n = len(values)
+    if n < width:
+        return np.full(n, np.nan)
+    shape = (n - width + 1, width)
+    strides = (values.strides[0], values.strides[0])
+    windows = as_strided(values, shape=shape, strides=strides)
+    valid = windows @ w
+    result = np.empty(n)
+    result[:width - 1] = np.nan
+    result[width - 1:] = valid
+    return result
+
+
+def build_ffd_series(
+    close_df: pd.DataFrame,
+    d_csv: str | Path,
+    thres: float = FFD_WEIGHT_THRESHOLD,
+) -> pd.DataFrame:
+    """Apply FFD to log(close) using per-asset d values from a CSV file.
+
+    Reproduces at inference time the same transformation applied by
+    04_build_ffd_sequences.py during training. d_csv must be the file
+    saved by that script (e.g. raw_bars_ffd_d_values.csv).
+    """
+    d_map = pd.read_csv(Path(d_csv), index_col=0)["d_optimal"].to_dict()
+    log_close = np.log(close_df.replace([np.inf, -np.inf], np.nan))
+
+    ffd_cols: dict[str, pd.Series] = {}
+    for col in log_close.columns:
+        if col not in d_map:
+            continue
+        s = log_close[col].ffill().dropna()
+        weights = get_weights_ffd(d_map[col], thres)
+        result = apply_ffd_1d(s.to_numpy(), weights)
+        ffd_cols[col] = pd.Series(result, index=s.index, name=col)
+
+    return pd.DataFrame(ffd_cols)
+
 
 def plot_training_curve(history, show=False):
     """Grafica la pérdida de entrenamiento y validación a lo largo de las épocas.

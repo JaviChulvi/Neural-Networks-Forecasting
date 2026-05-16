@@ -61,7 +61,7 @@ from sklearn.preprocessing import StandardScaler
 from typing import Any
 import keras
 
-from util import load_returns, get_train_test
+from util import load_returns, load_precios_close, get_train_test, build_ffd_series
 
 # ── Configuración ─────────────────────────────────────────────────────────────
 MODEL_TYPE    = os.getenv("BACKTEST_MODEL",    "cnn")   # "cnn", "lstm" o "gru"
@@ -89,6 +89,8 @@ end_of_backtest: Any
 relative: Any
 BAR_TYPE: Any        # str | None — tipo de bars usado; None = comportamiento original
 PREPROCESSING_DIR: Any  # Path | None — ruta base de los NPZ
+FFD: Any             # bool — si True aplica diferenciación fraccionaria
+ffd_series: Any      # pd.DataFrame | None — serie FFD para inferencia (solo cuando FFD=True)
 
 
 def _resolve_model_path(mtype: str, in_w: int, out_w: int, rel: bool, bar_type: str | None = None) -> Path:
@@ -120,6 +122,7 @@ def _auto_train(
     rel: bool,
     bar_type: str | None = None,
     preprocessing_dir: Path | None = None,
+    ffd: bool = False,
 ) -> None:
     """Importa y llama run() del script de entrenamiento correspondiente."""
     import importlib
@@ -139,7 +142,7 @@ def _auto_train(
 
     print(f"Modelo no encontrado. Entrenando con {module_name}.run() ...")
     train_module = importlib.import_module(module_name)
-    train_module.run(bar_type=bar_type, preprocessing_dir=preprocessing_dir)
+    train_module.run(bar_type=bar_type, preprocessing_dir=preprocessing_dir, ffd=ffd)
 
 
 # ── Setup ─────────────────────────────────────────────────────────────────────
@@ -150,6 +153,7 @@ def setup(
     model_type: str | None = None,
     bar_type: str | None = None,
     preprocessing_dir: Path | None = None,
+    ffd: bool = False,
 ) -> None:
     """Carga el modelo, ajusta el scaler (solo CNN) y configura los periodos de rebalanceo.
 
@@ -164,13 +168,15 @@ def setup(
                          pre-generados por 03_build_preprocessed_sequences.py en lugar del
                          parquet original. None usa el comportamiento original.
     preprocessing_dir  : Ruta base de los NPZ. Solo relevante si bar_type no es None.
+    ffd                : Si True, aplica diferenciación fraccionaria sobre las series antes
+                         del entrenamiento y del ajuste del scaler.
 
     Debe llamarse antes de usar cualquier otra función del módulo.
     Puede llamarse de nuevo con distintos parámetros para cambiar de modelo.
     """
     global model, scaler, returns_full, assets, n_assets
     global rebalance_dates, period_ends, end_of_backtest
-    global INPUT_WINDOW, OUTPUT_WINDOW, RELATIVE, MODEL_TYPE, BAR_TYPE, PREPROCESSING_DIR
+    global INPUT_WINDOW, OUTPUT_WINDOW, RELATIVE, MODEL_TYPE, BAR_TYPE, PREPROCESSING_DIR, FFD, ffd_series
 
     if input_window is not None:
         INPUT_WINDOW = input_window
@@ -182,6 +188,7 @@ def setup(
         MODEL_TYPE = model_type
     BAR_TYPE = bar_type
     PREPROCESSING_DIR = preprocessing_dir
+    FFD = ffd
 
     if MODEL_TYPE not in ("cnn", "lstm", "gru"):
         raise ValueError(
@@ -194,7 +201,7 @@ def setup(
 
     # Modelo — se reentrena siempre para garantizar que solo usa datos previos a 2025
     path = _resolve_model_path(MODEL_TYPE, INPUT_WINDOW, OUTPUT_WINDOW, RELATIVE, BAR_TYPE)
-    _auto_train(MODEL_TYPE, INPUT_WINDOW, OUTPUT_WINDOW, RELATIVE, BAR_TYPE, PREPROCESSING_DIR)
+    _auto_train(MODEL_TYPE, INPUT_WINDOW, OUTPUT_WINDOW, RELATIVE, BAR_TYPE, PREPROCESSING_DIR, FFD)
     model = keras.models.load_model(path)
     print(f"Modelo cargado: {path.relative_to(PROJECT_ROOT)}")
 
@@ -208,6 +215,7 @@ def setup(
             relative=RELATIVE,
             bar_type=BAR_TYPE,
             preprocessing_dir=PREPROCESSING_DIR,
+            ffd=FFD,
         )
         X_train_final, _, _, _ = split_train_val(d.X_train, d.y_train)
         n, w, a = X_train_final.shape
@@ -222,6 +230,24 @@ def setup(
     returns_full = load_returns(filename="returns.parquet")
     assets = list(returns_full.columns)
     n_assets = len(assets)
+
+    # Serie FFD para inferencia: misma transformación que en entrenamiento
+    if FFD:
+        _eff_bar = BAR_TYPE if BAR_TYPE is not None else "raw"
+        if _eff_bar == "raw":
+            close_df = load_precios_close()
+        else:
+            close_df = pd.read_parquet(
+                PROJECT_ROOT / "data" / "preprocessing" / f"{_eff_bar}_bars_close.parquet"
+            )
+        d_csv = PROJECT_ROOT / "data" / "preprocessing" / f"{_eff_bar}_bars_ffd_d_values.csv"
+        ffd_series = build_ffd_series(close_df, d_csv).reindex(columns=assets)
+        print(
+            f"FFD series: {ffd_series.shape}  "
+            f"({ffd_series.index.min().date()} → {ffd_series.index.max().date()})"
+        )
+    else:
+        ffd_series = None
 
     dates_2025 = returns_full.index[returns_full.index.year == 2025]
     print(
@@ -258,8 +284,9 @@ def setup(
 # ── Funciones auxiliares ──────────────────────────────────────────────────────
 def predict_at(date: pd.Timestamp) -> np.ndarray:
     """Predice la media de log-returns de los próximos OUTPUT_WINDOW días."""
-    iloc = returns_full.index.get_loc(date)
-    window = returns_full.iloc[iloc - INPUT_WINDOW : iloc].values
+    source = ffd_series if FFD else returns_full
+    iloc = source.index.get_loc(date)
+    window = source.iloc[iloc - INPUT_WINDOW : iloc].values
     X = window.reshape(1, INPUT_WINDOW, n_assets)
     if scaler is not None:
         X = scaler.transform(X.reshape(1, -1)).reshape(1, INPUT_WINDOW, n_assets)

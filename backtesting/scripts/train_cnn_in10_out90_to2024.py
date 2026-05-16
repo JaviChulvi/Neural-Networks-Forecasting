@@ -36,12 +36,14 @@ def run(
     force: bool = os.getenv("FORCE_RETRAIN", "1") == "1",
     bar_type: str | None = None,
     preprocessing_dir: Path | None = None,
+    ffd: bool = False,
 ) -> dict:
     """Entrena el CNN (input=10, output=90) sobre returns_to2024.parquet.
 
     bar_type ("time", "count", "volume", "dollar") carga los NPZ pre-generados
     por 03_build_preprocessed_sequences.py en lugar del parquet original.
     preprocessing_dir permite sobreescribir la ruta base de los NPZ.
+    ffd activa la diferenciación fraccionaria sobre las series antes del entrenamiento.
 
     Returns:
         dict con métricas y la ruta del modelo guardado.
@@ -55,6 +57,7 @@ def run(
         returns_file="returns_to2024.parquet",
         bar_type=bar_type,
         preprocessing_dir=preprocessing_dir,
+        ffd=ffd,
     )
     return row
 

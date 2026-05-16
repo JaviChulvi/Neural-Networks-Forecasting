@@ -1,0 +1,17 @@
+bar_type,input_window,output_window,status,n_bars_available,n_samples_total,n_train,n_test,n_assets,mean_d,start_date,end_date,sequence_file
+raw,5,1,ok,14739,14734,13260,1474,23,0.3260869565217392,1967-10-12,2026-05-08,data/preprocessing/sequences_ffd/raw/raw_ffd_input5_output1.npz
+raw,5,5,ok,14739,14730,13257,1473,23,0.3260869565217392,1967-10-12,2026-05-08,data/preprocessing/sequences_ffd/raw/raw_ffd_input5_output5.npz
+raw,5,30,ok,14739,14705,13234,1471,23,0.3260869565217392,1967-10-12,2026-05-08,data/preprocessing/sequences_ffd/raw/raw_ffd_input5_output30.npz
+raw,5,90,ok,14739,14645,13180,1465,23,0.3260869565217392,1967-10-12,2026-05-08,data/preprocessing/sequences_ffd/raw/raw_ffd_input5_output90.npz
+raw,10,1,ok,14739,14729,13256,1473,23,0.3260869565217392,1967-10-12,2026-05-08,data/preprocessing/sequences_ffd/raw/raw_ffd_input10_output1.npz
+raw,10,5,ok,14739,14725,13252,1473,23,0.3260869565217392,1967-10-12,2026-05-08,data/preprocessing/sequences_ffd/raw/raw_ffd_input10_output5.npz
+raw,10,30,ok,14739,14700,13230,1470,23,0.3260869565217392,1967-10-12,2026-05-08,data/preprocessing/sequences_ffd/raw/raw_ffd_input10_output30.npz
+raw,10,90,ok,14739,14640,13176,1464,23,0.3260869565217392,1967-10-12,2026-05-08,data/preprocessing/sequences_ffd/raw/raw_ffd_input10_output90.npz
+raw,30,1,ok,14739,14709,13238,1471,23,0.3260869565217392,1967-10-12,2026-05-08,data/preprocessing/sequences_ffd/raw/raw_ffd_input30_output1.npz
+raw,30,5,ok,14739,14705,13234,1471,23,0.3260869565217392,1967-10-12,2026-05-08,data/preprocessing/sequences_ffd/raw/raw_ffd_input30_output5.npz
+raw,30,30,ok,14739,14680,13212,1468,23,0.3260869565217392,1967-10-12,2026-05-08,data/preprocessing/sequences_ffd/raw/raw_ffd_input30_output30.npz
+raw,30,90,ok,14739,14620,13158,1462,23,0.3260869565217392,1967-10-12,2026-05-08,data/preprocessing/sequences_ffd/raw/raw_ffd_input30_output90.npz
+raw,90,1,ok,14739,14649,13184,1465,23,0.3260869565217392,1967-10-12,2026-05-08,data/preprocessing/sequences_ffd/raw/raw_ffd_input90_output1.npz
+raw,90,5,ok,14739,14645,13180,1465,23,0.3260869565217392,1967-10-12,2026-05-08,data/preprocessing/sequences_ffd/raw/raw_ffd_input90_output5.npz
+raw,90,30,ok,14739,14620,13158,1462,23,0.3260869565217392,1967-10-12,2026-05-08,data/preprocessing/sequences_ffd/raw/raw_ffd_input90_output30.npz
+raw,90,90,ok,14739,14560,13104,1456,23,0.3260869565217392,1967-10-12,2026-05-08,data/preprocessing/sequences_ffd/raw/raw_ffd_input90_output90.npz

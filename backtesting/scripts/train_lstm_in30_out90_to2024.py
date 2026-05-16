@@ -59,12 +59,14 @@ def run(
     batch_size: int = int(os.getenv("LSTM_BATCH_SIZE", "256")),
     bar_type: str | None = None,
     preprocessing_dir: Path | None = None,
+    ffd: bool = False,
 ) -> dict:
     """Entrena el LSTM (input=30, output=90) sobre returns_to2024.parquet.
 
     bar_type ("time", "count", "volume", "dollar") carga los NPZ pre-generados
     por 03_build_preprocessed_sequences.py en lugar del parquet original.
     preprocessing_dir permite sobreescribir la ruta base de los NPZ.
+    ffd activa la diferenciación fraccionaria sobre las series antes del entrenamiento.
 
     Returns:
         dict con MAE train/val/test, épocas entrenadas, nº parámetros y ruta del modelo.
@@ -79,6 +81,7 @@ def run(
         returns_file=RETURNS_FILE,
         bar_type=bar_type,
         preprocessing_dir=preprocessing_dir,
+        ffd=ffd,
     )
 
     val_size  = int(0.10 * d.X_train.shape[0])
