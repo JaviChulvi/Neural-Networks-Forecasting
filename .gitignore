@@ -52,3 +52,6 @@ wandb/
 *.joblib
 data/preprocessing/sequences/**/*.npz
 data/preprocessing/sequences/*.npz
+model/mlflow.db
+data/cnn/saved_models/
+data/cnn/adjusted_models/
