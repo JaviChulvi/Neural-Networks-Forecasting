@@ -1,3 +1,17 @@
+<!-- DELIVERY QUICK MAP -->
+
+## Mapa rápido de la entrega
+
+El repositorio se organiza según las dos partes de la práctica:
+
+1. **Competición**: modelos MLP, CNN, RNN y mixtos para las 16 combinaciones de ventanas de entrada/salida. Los resultados finales están agrupados en `reports/competition/` y el detalle técnico se mantiene en `model/` y `data/`.
+2. **Investigación**: preprocesado financiero con time bars, count bars, volume bars y dollar bars. El código está en `model/preprocessing/` y los resultados principales en `reports/preprocessing/`.
+3. **Backtesting 2025**: comparación de carteras con y sin predicciones. El código está en `backtesting/` y los outputs principales en `reports/backtesting/`.
+
+Para una revisión rápida de la estructura final, ver `DELIVERY_STRUCTURE.md`.
+
+---
+
 # Taller B3-T4/T5/T6 - Redes Neuronales para Forecasting
 
 Proyecto del bloque 3 orientado a la prediccion a futuro de activos financieros mediante redes neuronales. El objetivo es comparar arquitecturas densas, recurrentes, convolucionales y mixtas sobre distintas ventanas temporales de entrada y salida.

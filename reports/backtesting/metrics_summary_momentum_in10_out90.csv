@@ -1,0 +1,6 @@
+strategy,total_return_%,sharpe,max_drawdown_%,avg_turnover
+cnn_top4_equal,22.18,1.081,-9.49,0.0
+cnn_top4_riskadjusted,35.57,1.807,-9.79,0.5
+cnn_top4_threshold,22.18,1.081,-9.49,0.0
+bench_momentum,37.25,1.726,-10.33,1.333
+bench_equalweight,13.73,0.653,-11.33,0.0
