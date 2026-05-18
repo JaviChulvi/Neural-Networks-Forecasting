@@ -26,7 +26,7 @@ Note: (10,30) and (10,90) also have tuned notebooks; hybrid listed here for cros
 
 ## Main Conclusion
 
-- Mean test MAE **best tuned mixto** (14 windows) : `0.004871`
+- Mean test MAE **best tuned mixto** (14 windows) : `0.004870`
 - Mean test MAE **best hybrid CNN-RNN** (4 windows): `0.005354`
 - Mean test MAE **best mixed combined** (16 windows): `0.005376`
 - Mean test MAE **linear regression** (16 windows)  : `0.005668`
@@ -49,10 +49,10 @@ improve over pure LSTM/GRU for this low-noise financial time-series task.
 | arch_tag | arch_name | windows_won |
 | --- | --- | --- |
 | CM | cnn_mlp | 5 |
-| L | lstm | 4 |
 | CL | cnn_lstm | 3 |
+| L | lstm | 3 |
+| CG | cnn_gru | 2 |
 | CLM | cnn_lstm_mlp | 1 |
-| CG | cnn_gru | 1 |
 
 ---
 
@@ -60,9 +60,9 @@ improve over pure LSTM/GRU for this low-noise financial time-series task.
 
 | group | n_windows | mean_test | median_test | best_test | worst_test | mean_Δ_vs_lr | wins_vs_lr | mean_params |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Tuned Mixto | 14 | 0.004871 | 0.002349 | 0.001267 | 0.012273 | -0.000264 | 14 | 43088 |
+| Tuned Mixto | 14 | 0.004870 | 0.002349 | 0.001267 | 0.012273 | -0.000265 | 14 | 43005 |
 | Hybrid CNN-RNN | 4 | 0.005354 | 0.003950 | 0.001270 | 0.012244 | -0.000257 | 4 | 39383 |
-| Combined Best | 16 | 0.005376 | 0.003970 | 0.001267 | 0.012273 | -0.000292 | 16 | 42625 |
+| Combined Best | 16 | 0.005376 | 0.003970 | 0.001267 | 0.012273 | -0.000293 | 16 | 42553 |
 
 ---
 
@@ -75,7 +75,7 @@ improve over pure LSTM/GRU for this low-noise financial time-series task.
 | **out=1** | `0.012213` (CM) | `0.012244` (CL) | `0.012244` (HL) | `0.012273` (CM) |
 | **out=5** | `0.005604` (CM) | `0.005604` (CM) | `0.005581` (HG) | `0.005594` (L) |
 | **out=30** | `0.002339` (CL) | `0.002334` (L) | `0.002340` (L) | `0.002358` (CM) |
-| **out=90** | `0.001267` (CLM) | `0.001276` (L) | `0.001346` (CL) | `0.001396` (CG) |
+| **out=90** | `0.001267` (CLM) | `0.001272` (CG) | `0.001346` (CL) | `0.001396` (CG) |
 
 > (L) = LSTM · (G) = GRU · (CL) = CNN-LSTM · (CG) = CNN-GRU
 > (CLM) = CNN-LSTM-MLP · (CGM) = CNN-GRU-MLP · (CM) = CNN-MLP
@@ -94,7 +94,7 @@ improve over pure LSTM/GRU for this low-noise financial time-series task.
 | 10 | 1 | CL | 0.012244 | 0.012554 | -0.000310 | -2.47% |
 | 10 | 5 | CM | 0.005604 | 0.005698 | -0.000094 | -1.64% |
 | 10 | 30 | L | 0.002334 | 0.002358 | -0.000024 | -1.04% |
-| 10 | 90 | L | 0.001276 | 0.001282 | -0.000006 | -0.50% |
+| 10 | 90 | CG | 0.001272 | 0.001282 | -0.000010 | -0.81% |
 | 30 | 1 | HL | 0.012244 | 0.012924 | -0.000680 | -5.26% |
 | 30 | 5 | HG | 0.005581 | 0.005877 | -0.000295 | -5.03% |
 | 30 | 30 | L | 0.002340 | 0.002436 | -0.000096 | -3.95% |
@@ -116,7 +116,7 @@ improve over pure LSTM/GRU for this low-noise financial time-series task.
 | **out=1** | `0.012213` | `0.012244` | — | `0.012273` |
 | **out=5** | `0.005604` | `0.005604` | — | `0.005594` |
 | **out=30** | `0.002339` | `0.002334` | `0.002340` | `0.002358` |
-| **out=90** | `0.001267` | `0.001276` | `0.001346` | `0.001396` |
+| **out=90** | `0.001267` | `0.001272` | `0.001346` | `0.001396` |
 
 ---
 
@@ -152,7 +152,7 @@ improve over pure LSTM/GRU for this low-noise financial time-series task.
 | **out=1** | `-0.000171` ↓ | `-0.000310` ↓ | — | `-0.001822` ↓ |
 | **out=5** | `-0.000021` ↓ | `-0.000094` ↓ | — | `-0.000754` ↓ |
 | **out=30** | `-0.000001` ↓ | `-0.000024` ↓ | `-0.000096` ↓ | `-0.000270` ↓ |
-| **out=90** | `-0.000004` ↓ | `-0.000006` ↓ | `-0.000005` ↓ | `-0.000122` ↓ |
+| **out=90** | `-0.000004` ↓ | `-0.000010` ↓ | `-0.000005` ↓ | `-0.000122` ↓ |
 
 ## Δ (Hybrid CNN-RNN best − LR)
 
@@ -174,7 +174,7 @@ improve over pure LSTM/GRU for this low-noise financial time-series task.
 | **out=1** | `4215` (CM) | `72023` (CL) | `43415` (HL) | `46999` (CM) |
 | **out=5** | `10135` (CM) | `10135` (CM) | `35351` (HG) | `16247` (L) |
 | **out=30** | `11319` (CL) | `16247` (L) | `16247` (L) | `16023` (CM) |
-| **out=90** | `77527` (CLM) | `57047` (L) | `38999` (CL) | `210071` (CG) |
+| **out=90** | `77527` (CLM) | `55895` (CG) | `38999` (CL) | `210071` (CG) |
 
 > (L) = LSTM · (G) = GRU · (CL) = CNN-LSTM · (CG) = CNN-GRU
 > (CLM) = CNN-LSTM-MLP · (CGM) = CNN-GRU-MLP · (CM) = CNN-MLP
@@ -226,11 +226,11 @@ improve over pure LSTM/GRU for this low-noise financial time-series task.
 - **Training:** lr = 1e-03 · batch_size = 128
 - **Params:** 16,247
 
-### in=10, out=90  —  LSTM [tuned]  |  test_mae = `0.001276`  |  Δ vs LR = `-0.000006` (-0.50%)
+### in=10, out=90  —  CNN-GRU [tuned]  |  test_mae = `0.001272`  |  Δ vs LR = `-0.000010` (-0.81%)
 
-- **Architecture:** 2 LSTM layer(s) · 64 units/layer · dropout = 0.2
-- **Training:** lr = 1e-04 · batch_size = 64
-- **Params:** 57,047
+- **Architecture:** Conv1D(64 filters, ks=3) → GRU(64) × 2 layer(s) · dropout = 0.2
+- **Training:** lr = 1e-04 · batch_size = 256
+- **Params:** 55,895
 
 ### in=30, out=1  —  Hybrid CNN-LSTM [hybrid (fixed HP)]  |  test_mae = `0.012244`  |  Δ vs LR = `-0.000680` (-5.26%)
 
