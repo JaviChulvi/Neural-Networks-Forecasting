@@ -1,7 +1,7 @@
-"""Backtesting trimestral CNN / LSTM / GRU vs reversión a la media sobre 2025.
+"""Backtesting trimestral CNN / LSTM / GRU / MLP vs reversión a la media sobre 2025.
 
 El modelo a usar se elige con la variable de entorno BACKTEST_MODEL
-(valores: "cnn", "lstm" o "gru"; por defecto "cnn").
+(valores: "cnn", "lstm", "gru" o "mlp"; por defecto "cnn").
 
 Estrategias
 -----------
@@ -26,6 +26,7 @@ Uso como script
     python backtesting/scripts/backtest_quarterly_reversion.py
     BACKTEST_MODEL=lstm python backtesting/scripts/backtest_quarterly_reversion.py
     BACKTEST_MODEL=gru  python backtesting/scripts/backtest_quarterly_reversion.py
+    BACKTEST_MODEL=mlp  python backtesting/scripts/backtest_quarterly_reversion.py
     BACKTEST_MODEL=cnn CNN_INPUT_WINDOW=30 python backtesting/scripts/backtest_quarterly_reversion.py
     CNN_RELATIVE=1 python backtesting/scripts/backtest_quarterly_reversion.py  # solo CNN
 
@@ -35,6 +36,7 @@ Uso como módulo (desde un notebook, por ejemplo)
     bt.setup()                                              # CNN input=10, output=90, absoluto
     bt.setup(model_type="lstm")                             # LSTM input=10, output=90
     bt.setup(model_type="gru")                              # GRU input=10, output=90
+    bt.setup(model_type="mlp")                              # MLP input=10, output=90
     bt.setup(model_type="cnn", input_window=30)             # CNN input=30, output=90
     bt.setup(model_type="cnn", relative=True)               # CNN target relativo
     ret_df, holdings = bt.run_backtest()
@@ -67,7 +69,7 @@ import keras
 from util import load_returns, get_train_test
 
 # ── Configuración ─────────────────────────────────────────────────────────────
-MODEL_TYPE    = os.getenv("BACKTEST_MODEL",    "cnn")   # "cnn", "lstm" o "gru"
+MODEL_TYPE    = os.getenv("BACKTEST_MODEL",    "cnn")   # "cnn", "lstm", "gru" o "mlp"
 INPUT_WINDOW  = int(os.getenv("CNN_INPUT_WINDOW",  "10"))
 OUTPUT_WINDOW = int(os.getenv("CNN_OUTPUT_WINDOW", "90"))
 RELATIVE      = os.getenv("CNN_RELATIVE", "0") == "1"
@@ -77,12 +79,14 @@ PRED_THRESHOLD = 1e-4   # media diaria log-return mínima (~1 % en 90 días de h
 RISK_FREE_ANNUAL = 0.04
 
 RNN_MODELS_DIR = PROJECT_ROOT / "data" / "rnn" / "saved_models"
+MLP_MODELS_DIR = PROJECT_ROOT / "data" / "mlp" / "saved_models"
+MLP_MODEL_NAME = "mlp_4x100_gelu_dropout_l2"
 OUTPUT_DIR     = PROJECT_ROOT / "data" / "backtest"
 
 # ── Estado del módulo (poblado por setup()) ───────────────────────────────────
 # Typed as Any: estas variables se asignan en setup(); usarlas antes lanza NameError.
 model: Any
-scaler: Any          # StandardScaler para CNN; None para LSTM/GRU
+scaler: Any          # StandardScaler para CNN; None para LSTM/GRU/MLP
 returns_full: Any
 log_prices: Any
 assets: Any
@@ -98,6 +102,8 @@ def _resolve_model_path(mtype: str, in_w: int, out_w: int, rel: bool) -> Path:
         from cnn_utils import MODELS_DIR as CNN_MODELS_DIR
         suffix = "_rel" if rel else ""
         return CNN_MODELS_DIR / f"cnn_input{in_w}_output{out_w}{suffix}_model.keras"
+    if mtype == "mlp":
+        return MLP_MODELS_DIR / f"{MLP_MODEL_NAME}_input{in_w}_output{out_w}_model.keras"
     # lstm o gru — misma convención de nombres
     return RNN_MODELS_DIR / f"rnn_{mtype}_input{in_w}_output{out_w}_model.keras"
 
@@ -111,6 +117,7 @@ TRAIN_SCRIPTS: dict[tuple[str, int, int, bool], str] = {
     ("lstm", 10, 90, False): "train_lstm_in10_out90_to2024",
     ("lstm", 30, 90, False): "train_lstm_in30_out90_to2024",
     ("gru",  10, 90, False): "train_gru_in10_out90_to2024",
+    ("mlp",  10, 90, False): "train_mlp_in10_out90_to2024",
 }
 
 
@@ -151,7 +158,7 @@ def setup(
     output_window : Tamaño de la ventana de salida (días). Por defecto CNN_OUTPUT_WINDOW / 90.
     relative      : Solo aplicable al modelo CNN. Si True, carga la variante _rel.
                     Se ignora para LSTM y GRU (no existe variante relativa).
-    model_type    : "cnn", "lstm" o "gru". Por defecto BACKTEST_MODEL / "cnn".
+    model_type    : "cnn", "lstm", "gru" o "mlp". Por defecto BACKTEST_MODEL / "cnn".
 
     Debe llamarse antes de usar cualquier otra función del módulo.
     Puede llamarse de nuevo con distintos parámetros para cambiar de modelo.
@@ -169,22 +176,23 @@ def setup(
     if model_type is not None:
         MODEL_TYPE = model_type
 
-    if MODEL_TYPE not in ("cnn", "lstm", "gru"):
+    if MODEL_TYPE not in ("cnn", "lstm", "gru", "mlp"):
         raise ValueError(
-            f"model_type debe ser 'cnn', 'lstm' o 'gru', recibido: {MODEL_TYPE!r}"
+            f"model_type debe ser 'cnn', 'lstm', 'gru' o 'mlp', recibido: {MODEL_TYPE!r}"
         )
-    if MODEL_TYPE in ("lstm", "gru") and RELATIVE:
+    if MODEL_TYPE in ("lstm", "gru", "mlp") and RELATIVE:
         raise ValueError(
             f"El modelo {MODEL_TYPE.upper()} no tiene variante relativa (_rel)."
         )
 
     # Modelo
     path = _resolve_model_path(MODEL_TYPE, INPUT_WINDOW, OUTPUT_WINDOW, RELATIVE)
-    _auto_train(MODEL_TYPE, INPUT_WINDOW, OUTPUT_WINDOW, RELATIVE)
+    if os.getenv("BACKTEST_FORCE_RETRAIN", "0") == "1" or not path.exists():
+        _auto_train(MODEL_TYPE, INPUT_WINDOW, OUTPUT_WINDOW, RELATIVE)
     model = keras.models.load_model(path)
     print(f"Modelo cargado: {path.relative_to(PROJECT_ROOT)}")
 
-    # Scaler — solo CNN (LSTM y GRU fueron entrenados sobre retornos crudos sin escalado)
+    # Scaler — solo CNN (LSTM/GRU usan retornos crudos; MLP normaliza dentro del .keras)
     if MODEL_TYPE == "cnn":
         from cnn_utils import split_train_val
         d = get_train_test(
@@ -200,7 +208,7 @@ def setup(
         print(f"Scaler ajustado sobre {n} secuencias ({w}d × {a} activos).")
     else:
         scaler = None
-        print(f"{MODEL_TYPE.upper()}: sin escalado de inputs.")
+        print(f"{MODEL_TYPE.upper()}: sin escalado externo de inputs.")
 
     # Datos completos (incluye 2025)
     returns_full = load_returns(filename="returns.parquet")
@@ -248,6 +256,8 @@ def predict_at(date: pd.Timestamp) -> np.ndarray:
     X = window.reshape(1, INPUT_WINDOW, n_assets)
     if scaler is not None:
         X = scaler.transform(X.reshape(1, -1)).reshape(1, INPUT_WINDOW, n_assets)
+    elif MODEL_TYPE == "mlp":
+        X = X.reshape(1, INPUT_WINDOW * n_assets)
     return model.predict(X, verbose=0)[0]
 
 
