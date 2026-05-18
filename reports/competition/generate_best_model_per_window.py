@@ -4,13 +4,19 @@ Compare MLP, CNN, RNN, and Mixtos families and find the global best model per
 Writes best_model_per_window_report.md to reports/competition/.
 
 Data extracted from:
-  model/mlp/mlp_vs_lr_report.md
+  data/mlp/*.csv
   model/cnn/cnn_vs_lr_report.md
   model/rnn/rnn_vs_lr_report.md
   model/mixtos/mixtos_vs_lr_report.md
 """
 
 from pathlib import Path
+
+import pandas as pd
+
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+DATA_DIR = PROJECT_ROOT / "data"
 
 # ---------------------------------------------------------------------------
 # LR benchmark — shared across all families
@@ -26,24 +32,8 @@ LR = {
 # Best model per window per family (lowest test MAE from each family report)
 # ---------------------------------------------------------------------------
 
-MLP_BEST = {
-    (5,  1):  {"model": "mlp_3x128_gelu_dropout_l2", "mae": 0.012224},
-    (5,  5):  {"model": "mlp_4x100_gelu_dropout_l2", "mae": 0.005574},
-    (5,  30): {"model": "mlp_4x100_gelu_dropout_l2", "mae": 0.002321},
-    (5,  90): {"model": "mlp_4x100_gelu_dropout_l2", "mae": 0.001266},
-    (10, 1):  {"model": "mlp_3x128_gelu_dropout_l2", "mae": 0.012225},
-    (10, 5):  {"model": "mlp_4x100_gelu_dropout_l2", "mae": 0.005573},
-    (10, 30): {"model": "mlp_4x100_gelu_dropout_l2", "mae": 0.002321},
-    (10, 90): {"model": "mlp_4x100_gelu_dropout_l2", "mae": 0.001263},
-    (30, 1):  {"model": "mlp_3x128_gelu_dropout_l2", "mae": 0.012232},
-    (30, 5):  {"model": "mlp_4x100_gelu_dropout_l2", "mae": 0.005574},
-    (30, 30): {"model": "mlp_4x100_gelu_dropout_l2", "mae": 0.002323},
-    (30, 90): {"model": "mlp_4x100_gelu_dropout_l2", "mae": 0.001264},
-    (90, 1):  {"model": "mlp_3x128_gelu_dropout_l2", "mae": 0.012249},
-    (90, 5):  {"model": "mlp_3x128_gelu_dropout_l2", "mae": 0.005605},
-    (90, 30): {"model": "mlp_4x100_gelu_dropout_l2", "mae": 0.002323},
-    (90, 90): {"model": "mlp_4x100_gelu_dropout_l2", "mae": 0.001268},
-}
+# MLP is loaded dynamically from data/mlp/*.csv in load_mlp_best().
+MLP_BEST: dict[tuple[int, int], dict[str, float | str]] = {}
 
 CNN_BEST = {
     (5,  1):  {"model": "CNN_Deep_Conv1D", "mae": 0.012237},
@@ -101,6 +91,46 @@ MIXTOS_BEST = {
     (90, 30): {"model": "CNN-MLP (tuned)",      "mae": 0.002358},
     (90, 90): {"model": "CNN-GRU (tuned)",      "mae": 0.001396},
 }
+
+
+def load_lr_benchmark() -> dict[tuple[int, int], float]:
+    lr_df = pd.read_csv(DATA_DIR / "lr_benchmark.csv")
+    return {
+        (int(row.input_window), int(row.output_window)): float(row.MAE_test)
+        for row in lr_df.itertuples(index=False)
+    }
+
+
+def load_mlp_best() -> dict[tuple[int, int], dict[str, float | str]]:
+    paths = sorted(
+        path for path in (DATA_DIR / "mlp").glob("mlp_*.csv")
+        if not path.name.endswith("_history.csv")
+    )
+    if not paths:
+        raise FileNotFoundError(f"No MLP CSV files found in {DATA_DIR / 'mlp'}")
+
+    all_rows = pd.concat([pd.read_csv(path) for path in paths], ignore_index=True)
+    idx = all_rows.groupby(["input_window", "output_window"])["MAE_test"].idxmin()
+    best_df = (
+        all_rows.loc[idx]
+        .sort_values(["input_window", "output_window"])
+        .reset_index(drop=True)
+    )
+
+    ref_path = Path(__file__).parent / "mlp_best_family_results_reference.csv"
+    best_df.to_csv(ref_path, index=False)
+
+    return {
+        (int(row.input_window), int(row.output_window)): {
+            "model": str(row.model_name),
+            "mae": float(row.MAE_test),
+        }
+        for row in best_df.itertuples(index=False)
+    }
+
+
+LR = load_lr_benchmark()
+MLP_BEST = load_mlp_best()
 
 FAMILIES = {
     "MLP":    MLP_BEST,
@@ -287,25 +317,24 @@ def build_report(results):
         lines.append(row)
     lines.append("")
 
+    sorted_family_wins = sorted(wins_by_family.items(), key=lambda x: (-x[1], x[0]))
+    top_family, top_wins = sorted_family_wins[0]
+    runner_family, runner_wins = sorted_family_wins[1]
+
     # -- Interpretation --
     lines += [
         "## Interpretación",
         "",
-        "- **Empate CNN–MLP (8–8)**: ambas familias se reparten las 16 ventanas a partes iguales.",
-        "  RNN y Mixtos no ganan ninguna ventana cuando se comparan contra las cuatro familias.",
-        "- **Patrón por output_window**: MLP domina las salidas cortas (`out=1` y `out=5`),"
-        "  mientras que CNN gana la mayoría de las salidas largas (`out=30` y `out=90`).",
-        "  La única excepción relevante es `in=90, out=1` donde MLP aún gana.",
-        "- **Patrón por input_window**: con `input=5`, MLP gana 3 de 4 ventanas de salida;",
-        "  con `input=90`, CNN gana 3 de 4. Para ventanas intermedias el reparto es mixto.",
-        "- **Márgenes muy pequeños**: en la mayoría de ventanas la diferencia CNN–MLP es",
-        "  < 0.0001 MAE, dentro de la variabilidad aleatoria del entrenamiento. En la práctica",
-        "  ambas arquitecturas capturan la misma señal de esta serie financiera de bajo SNR.",
-        "- **RNN y Mixtos**: la complejidad recurrente añadida (LSTM/GRU puro o CNN-RNN híbrido)",
-        "  no reporta mejora sistemática sobre MLP o CNN en ninguna ventana.",
+        f"- **Familia líder**: `{top_family}` gana {top_wins} de {n} ventanas; "
+        f"`{runner_family}` queda detrás con {runner_wins}.",
+        "- **Lectura por ventana**: usa la matriz de familia ganadora para ver dónde cambia",
+        "  la arquitectura preferida. Las diferencias de MAE son pequeñas en muchas celdas,",
+        "  así que conviene interpretar los ganadores como ranking empírico, no como dominancia",
+        "  estadística fuerte sin repetir semillas.",
+        "- **RNN y Mixtos**: cuando no ganan una celda, no significa que sean inútiles;",
+        "  significa que, con los resultados guardados actuales, otra familia tiene menor MAE test.",
         "- **16/16 ventanas superan a LR**: el modelo global óptimo mejora a la regresión lineal",
-        "  en las 16 combinaciones, incluyendo `(in=5, out=90)` donde los modelos recurrentes",
-        "  no conseguían superar el benchmark (CNN sí lo hace con −0.72%).",
+        "  en las 16 combinaciones.",
         "- **Mejora vs LR crece con input_window**: de ~−1% con `input=5` a ~−12/−17%",
         "  con `input=90`, patrón consistente con los reportes individuales de cada familia.",
         "",

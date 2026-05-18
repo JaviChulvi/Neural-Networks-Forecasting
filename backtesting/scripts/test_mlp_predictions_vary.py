@@ -9,9 +9,10 @@ Diagrama de causalidad que el test explora:
 Si los tests de inputs pasan pero los de predicciones fallan, el modelo es un
 predictor constante (aprende la mediana del target e ignora el input).
 
-Nota: el MLP (mlp_4x100_gelu_dropout_l2) fue entrenado sobre retornos crudos
-(sin StandardScaler). Los inputs se aplanan a (N_SAMPLES, INPUT_WINDOW * n_assets)
-antes de pasarlos al modelo, igual que en el notebook de entrenamiento.
+Nota: el MLP (mlp_4x100_gelu_dropout_l2) recibe retornos crudos en inferencia.
+El artefacto incluye normalización interna, por lo que aquí no se aplica ningún
+scaler externo. Los inputs se aplanan a (N_SAMPLES, INPUT_WINDOW * n_assets)
+antes de pasarlos al modelo.
 
 Ejecución:
     pytest backtesting/scripts/test_mlp_predictions_vary.py -v
@@ -43,13 +44,24 @@ MODEL_PATH = (
 RETURNS_FILE = "returns_to2024.parquet"
 
 
+def require_model_file() -> None:
+    """Skip tests cleanly when the ignored local .keras artifact is absent."""
+    if not MODEL_PATH.exists():
+        pytest.skip(
+            f"Modelo MLP no encontrado: {MODEL_PATH}. "
+            "Regenera el artefacto con "
+            "`python backtesting/scripts/train_mlp_in10_out90_to2024.py`."
+        )
+
+
 # ── fixture compartida entre tests ────────────────────────────────────────
 @pytest.fixture(scope="module")
 def inference_data():
     """Devuelve (X_sample, X_flat, preds, indices) para 100 instantes temporales espaciados."""
+    require_model_file()
     returns = load_returns(str(DATA_DIR), RETURNS_FILE)
     X, _ = create_time_series_data(returns, INPUT_WINDOW, OUTPUT_WINDOW)
-    # X: (n_total, INPUT_WINDOW, n_assets) — sin escalado (igual que en el notebook)
+    # X: (n_total, INPUT_WINDOW, n_assets) — sin escalado externo
 
     n_total = len(X)
 
@@ -73,6 +85,7 @@ def inference_data():
 
 def test_model_file_exists():
     """El fichero .keras existe antes de intentar cargarlo."""
+    require_model_file()
     assert MODEL_PATH.exists(), f"Modelo no encontrado: {MODEL_PATH}"
 
 

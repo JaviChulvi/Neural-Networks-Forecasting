@@ -1,0 +1,10 @@
+strategy,total_return_%,sharpe,max_drawdown_%,avg_turnover
+model_top4_equal,20.54,0.834,-11.72,0.167
+model_top4_riskadjusted,19.3,0.973,-7.73,0.667
+model_top4_threshold,20.54,0.834,-11.72,0.167
+model_top4_propweights,20.42,0.85,-11.37,0.167
+model_longshort,16.6,0.791,-9.92,0.167
+bench_reversion_zscore_90d,19.46,0.641,-17.72,1.5
+bench_reversion_zscore_input,11.72,0.304,-20.33,1.667
+bench_reversion_longshort,9.84,0.223,-17.08,2.167
+bench_equalweight,13.73,0.653,-11.33,0.0
