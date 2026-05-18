@@ -61,10 +61,7 @@ La carga y generacion de ventanas se centraliza en `util.py`.
 │   └── scripts/                  # Implementaciones reutilizables de cada estrategia
 ├── Lectura_datos.ipynb           # Lectura, limpieza y guardado de datos
 ├── util.py                       # Funciones comunes de datos, benchmarks y graficas
-├── best_model_per_window.py      # Selecciona el mejor modelo por ventana entre las 4 familias y genera el reporte
-├── best_model_per_window_report.md  # Reporte comparativo global: mejor MAE test por (input, output) entre MLP, CNN, RNN y Mixtos
 ├── requirements.txt              # Dependencias Python del proyecto
-├── Taller_B3_T4.pdf              # Enunciado de la practica
 └── README.md
 ```
 

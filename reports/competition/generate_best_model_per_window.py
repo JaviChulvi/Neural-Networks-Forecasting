@@ -1,7 +1,7 @@
 """
 Compare MLP, CNN, RNN, and Mixtos families and find the global best model per
 (input_window, output_window) combination by test MAE.
-Writes best_model_per_window_report.md to the project root.
+Writes best_model_per_window_report.md to reports/competition/.
 
 Data extracted from:
   model/mlp/mlp_vs_lr_report.md

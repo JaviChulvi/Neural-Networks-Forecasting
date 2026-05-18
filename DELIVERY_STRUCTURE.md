@@ -10,12 +10,12 @@ Code:
 - `model/cnn/`
 - `model/rnn/`
 - `model/mixtos/`
-- `best_model_per_window.py`
+- `reports/competition/generate_best_model_per_window.py`
 
 Results:
 
 - `reports/competition/`
-- `best_model_per_window_report.md`
+- `reports/competition/best_model_per_window_report.md`
 - `data/*` family result folders
 
 ## 2. Research and financial preprocessing
@@ -46,3 +46,7 @@ Results:
 ## Notes
 
 The original code paths are preserved to avoid breaking notebooks and scripts. The `reports/` folder is an additional review layer that gathers the final outputs required for the PDF/presentation.
+
+## 4. Diagnostics
+
+- `reports/diagnostics/`: diagnostic notebooks and validation checks.
