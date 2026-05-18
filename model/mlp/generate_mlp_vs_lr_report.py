@@ -218,7 +218,7 @@ def main() -> None:
     all_results = load_results()
     lr_df = pd.read_csv(LR_BENCH_CSV)
     report = build_report(all_results, lr_df)
-    OUT_MD.write_text(report + "\n", encoding="utf-8")
+    OUT_MD.write_text(report.rstrip() + "\n", encoding="utf-8")
     print(f"Report written -> {OUT_MD}")
 
 

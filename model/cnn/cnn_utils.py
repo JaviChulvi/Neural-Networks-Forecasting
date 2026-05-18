@@ -1,6 +1,7 @@
 import os
 os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "2")
 
+import re
 import sys
 from pathlib import Path
 
@@ -88,6 +89,27 @@ def scale_X_only(X_train, X_val, X_test):
     X_test_scaled = scaler.transform(X_test_2d).reshape(n_test, window, n_assets)
 
     return X_train_scaled, X_val_scaled, X_test_scaled
+
+
+def markdown_table(df: pd.DataFrame, index: bool = False) -> str:
+    """Small Markdown table writer that avoids pandas' optional tabulate dependency."""
+    table = df.reset_index() if index else df
+    columns = [str(col) for col in table.columns]
+
+    def fmt(value: object) -> str:
+        if pd.isna(value):
+            return ""
+        if isinstance(value, float):
+            return f"{value:.6g}"
+        return str(value).replace("|", "\\|")
+
+    lines = [
+        "| " + " | ".join(columns) + " |",
+        "| " + " | ".join("---" for _ in columns) + " |",
+    ]
+    for row in table.itertuples(index=False):
+        lines.append("| " + " | ".join(fmt(value) for value in row) + " |")
+    return "\n".join(lines)
 
 
 def build_deep_cnn(input_window, n_assets):
@@ -286,7 +308,8 @@ def train_cnn_window(
 
 
 def aggregate_cnn_grid_results():
-    result_files = sorted(RESULTS_DIR.glob("cnn_input*_output*_results.csv"))
+    result_pattern = re.compile(r"^cnn_input\d+_output\d+_results\.csv$")
+    result_files = sorted(p for p in RESULTS_DIR.glob("cnn_input*_output*_results.csv") if result_pattern.match(p.name))
     if not result_files:
         raise FileNotFoundError("No CNN window result files found.")
 
@@ -322,14 +345,14 @@ def aggregate_cnn_grid_results():
         "",
         "## Results",
         "",
-        comparison[[
+        markdown_table(comparison[[
             "input_window", "output_window", "MAE_train", "MAE_val", "MAE_test",
             "LR_MAE_test", "pct_delta_vs_lr", "params", "epochs_trained"
-        ]].to_markdown(index=False),
+        ]]),
         "",
         "## MAE test matrix",
         "",
-        matrix.to_markdown(),
+        markdown_table(matrix, index=True),
         "",
     ]
 
@@ -340,7 +363,7 @@ def aggregate_cnn_grid_results():
             "",
             "A random-search hyperparameter experiment was also performed for the 30 input / 5 output window.",
             "",
-            pd.read_csv(search_result).to_markdown(index=False),
+            markdown_table(pd.read_csv(search_result)),
             "",
         ]
 

@@ -302,6 +302,33 @@ def _attach_lr(df: pd.DataFrame) -> pd.DataFrame:
 mixto_df  = _attach_lr(mixto_df)
 hybrid_df = _attach_lr(hybrid_df)
 
+hybrid_best_test_comparison_path = HYBRID_DIR / "hybrid_best_test_comparison_vs_lr.csv"
+(
+    hybrid_best_df
+    .drop(
+        columns=[
+            "LR_MAE_train",
+            "LR_MAE_test",
+            "delta_vs_lr",
+            "pct_delta_vs_lr",
+        ],
+        errors="ignore",
+    )
+    .merge(
+        lr_df[["input_window", "output_window", "MAE_train", "MAE_test"]].rename(
+            columns={"MAE_train": "LR_MAE_train", "MAE_test": "LR_MAE_test"}
+        ),
+        on=["input_window", "output_window"],
+        how="left",
+    )
+    .assign(
+        delta_vs_lr=lambda d: d["MAE_test"] - d["LR_MAE_test"],
+        pct_delta_vs_lr=lambda d: 100 * d["delta_vs_lr"] / d["LR_MAE_test"],
+    )
+    .sort_values(["input_window", "output_window"])
+    .to_csv(hybrid_best_test_comparison_path, index=False)
+)
+
 # Combined best (16 windows): tuned mixto for 14 + hybrid for (30,1) and (30,5)
 _tuned_windows = set(zip(mixto_df.input_window, mixto_df.output_window))
 hybrid_only_df = hybrid_df[

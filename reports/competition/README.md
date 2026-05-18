@@ -21,4 +21,10 @@ python reports/competition/generate_best_model_per_window.py
 
 The global generator reads the current MLP CSV files from `data/mlp/` and
 updates `mlp_best_family_results_reference.csv` before building the global
-best-model report.
+best-model report. It also reads the current CNN CSV plus the generated RNN
+and mixed-model Markdown reports, so the global ranking follows the latest
+family-level report outputs.
+
+For hybrid CNN-RNN outputs, `hybrid_comparison_vs_lr.csv` in this folder uses
+the test-MAE winner per window, matching `family_reports/cnn_rnn_hybrid_vs_lr_report.md`.
+The validation-selected notebook output remains under `data/mixtos/cnn_rnn_hybrid/`.

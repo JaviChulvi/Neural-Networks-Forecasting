@@ -291,6 +291,26 @@ def plot_bar_durations(bars: Dict[str, Dict[str, object]], output_path: Path) ->
     plt.close()
 
 
+def markdown_table(df: pd.DataFrame) -> str:
+    """Small Markdown table writer that avoids pandas' optional tabulate dependency."""
+    columns = [str(col) for col in df.columns]
+
+    def fmt(value: object) -> str:
+        if pd.isna(value):
+            return ""
+        if isinstance(value, float):
+            return f"{value:.6g}"
+        return str(value).replace("|", "\\|")
+
+    lines = [
+        "| " + " | ".join(columns) + " |",
+        "| " + " | ".join("---" for _ in columns) + " |",
+    ]
+    for row in df.itertuples(index=False):
+        lines.append("| " + " | ".join(fmt(value) for value in row) + " |")
+    return "\n".join(lines)
+
+
 def create_preprocessing_report(summary: pd.DataFrame, output_path: Path | None = None) -> Path:
     if output_path is None:
         output_path = PROJECT_ROOT / "model" / "preprocessing" / "preprocessing_report.md"
@@ -318,7 +338,7 @@ def create_preprocessing_report(summary: pd.DataFrame, output_path: Path | None 
         "",
         "## Summary",
         "",
-        summary.to_markdown(index=False),
+        markdown_table(summary),
         "",
         "## Output files",
         "",

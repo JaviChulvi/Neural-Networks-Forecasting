@@ -1,2 +1,2 @@
 model,selected_trial_id,input_window,output_window,MAE_train,MAE_val,MAE_test,params,selection_metric
-CNN_Optimized_RandomSearch,1,30,5,0.005476368579172402,0.00415060638481016,0.00557801648131348,78327,MAE_val
+CNN_Optimized_RandomSearch,2,30,5,0.0054793414875863745,0.0041367089167203925,0.005597715517218915,81495,MAE_val

@@ -5,7 +5,7 @@ Writes best_model_per_window_report.md to reports/competition/.
 
 Data extracted from:
   data/mlp/*.csv
-  model/cnn/cnn_vs_lr_report.md
+  data/cnn/cnn_all_results.csv
   model/rnn/rnn_vs_lr_report.md
   model/mixtos/mixtos_vs_lr_report.md
 """
@@ -17,79 +17,23 @@ import pandas as pd
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DATA_DIR = PROJECT_ROOT / "data"
+MODEL_DIR = PROJECT_ROOT / "model"
 
-# ---------------------------------------------------------------------------
-# LR benchmark — shared across all families
-# ---------------------------------------------------------------------------
-LR = {
-    (5,  1): 0.012384, (5,  5): 0.005625, (5,  30): 0.002340, (5,  90): 0.001271,
-    (10, 1): 0.012554, (10, 5): 0.005698, (10, 30): 0.002358, (10, 90): 0.001282,
-    (30, 1): 0.012924, (30, 5): 0.005877, (30, 30): 0.002436, (30, 90): 0.001351,
-    (90, 1): 0.014095, (90, 5): 0.006348, (90, 30): 0.002628, (90, 90): 0.001518,
-}
+INPUT_WINDOWS  = [5, 10, 30, 90]
+OUTPUT_WINDOWS = [1, 5, 30, 90]
+WINDOWS = [(i, o) for i in INPUT_WINDOWS for o in OUTPUT_WINDOWS]
 
-# ---------------------------------------------------------------------------
-# Best model per window per family (lowest test MAE from each family report)
-# ---------------------------------------------------------------------------
-
-# MLP is loaded dynamically from data/mlp/*.csv in load_mlp_best().
-MLP_BEST: dict[tuple[int, int], dict[str, float | str]] = {}
-
-CNN_BEST = {
-    (5,  1):  {"model": "CNN_Deep_Conv1D", "mae": 0.012237},
-    (5,  5):  {"model": "CNN_Deep_Conv1D", "mae": 0.0055824},
-    (5,  30): {"model": "CNN_Deep_Conv1D", "mae": 0.00232186},
-    (5,  90): {"model": "CNN_Deep_Conv1D", "mae": 0.0012622},
-    (10, 1):  {"model": "CNN_Deep_Conv1D", "mae": 0.0122385},
-    (10, 5):  {"model": "CNN_Deep_Conv1D", "mae": 0.00557466},
-    (10, 30): {"model": "CNN_Deep_Conv1D", "mae": 0.00232092},
-    (10, 90): {"model": "CNN_Deep_Conv1D", "mae": 0.00125936},
-    (30, 1):  {"model": "CNN_Deep_Conv1D", "mae": 0.0122434},
-    (30, 5):  {"model": "CNN_Deep_Conv1D", "mae": 0.0055767},
-    (30, 30): {"model": "CNN_Deep_Conv1D", "mae": 0.00231923},
-    (30, 90): {"model": "CNN_Deep_Conv1D", "mae": 0.0012626},
-    (90, 1):  {"model": "CNN_Deep_Conv1D", "mae": 0.0122595},
-    (90, 5):  {"model": "CNN_Deep_Conv1D", "mae": 0.00558627},
-    (90, 30): {"model": "CNN_Deep_Conv1D", "mae": 0.00232253},
-    (90, 90): {"model": "CNN_Deep_Conv1D", "mae": 0.00126382},
-}
-
-RNN_BEST = {
-    (5,  1):  {"model": "LSTM", "mae": 0.012238},
-    (5,  5):  {"model": "LSTM", "mae": 0.005586},
-    (5,  30): {"model": "LSTM", "mae": 0.002325},
-    (5,  90): {"model": "LSTM", "mae": 0.001275},
-    (10, 1):  {"model": "LSTM", "mae": 0.012234},
-    (10, 5):  {"model": "LSTM", "mae": 0.005582},
-    (10, 30): {"model": "LSTM", "mae": 0.002334},
-    (10, 90): {"model": "GRU",  "mae": 0.001270},
-    (30, 1):  {"model": "GRU",  "mae": 0.012240},
-    (30, 5):  {"model": "LSTM", "mae": 0.005584},
-    (30, 30): {"model": "LSTM", "mae": 0.002340},
-    (30, 90): {"model": "GRU",  "mae": 0.001269},
-    (90, 1):  {"model": "LSTM", "mae": 0.012256},
-    (90, 5):  {"model": "LSTM", "mae": 0.005594},
-    (90, 30): {"model": "LSTM", "mae": 0.002343},
-    (90, 90): {"model": "GRU",  "mae": 0.001288},
-}
-
-MIXTOS_BEST = {
-    (5,  1):  {"model": "CNN-MLP (tuned)",      "mae": 0.012213},
-    (5,  5):  {"model": "CNN-MLP (tuned)",      "mae": 0.005604},
-    (5,  30): {"model": "CNN-LSTM (tuned)",     "mae": 0.002339},
-    (5,  90): {"model": "CNN-LSTM-MLP (tuned)", "mae": 0.001267},
-    (10, 1):  {"model": "CNN-LSTM (tuned)",     "mae": 0.012244},
-    (10, 5):  {"model": "CNN-MLP (tuned)",      "mae": 0.005604},
-    (10, 30): {"model": "LSTM (tuned)",         "mae": 0.002334},
-    (10, 90): {"model": "LSTM (tuned)",         "mae": 0.001276},
-    (30, 1):  {"model": "Hybrid CNN-LSTM",      "mae": 0.012244},
-    (30, 5):  {"model": "Hybrid CNN-GRU",       "mae": 0.005581},
-    (30, 30): {"model": "LSTM (tuned)",         "mae": 0.002340},
-    (30, 90): {"model": "CNN-LSTM (tuned)",     "mae": 0.001346},
-    (90, 1):  {"model": "CNN-MLP (tuned)",      "mae": 0.012273},
-    (90, 5):  {"model": "LSTM (tuned)",         "mae": 0.005594},
-    (90, 30): {"model": "CNN-MLP (tuned)",      "mae": 0.002358},
-    (90, 90): {"model": "CNN-GRU (tuned)",      "mae": 0.001396},
+MIXTOS_LABELS = {
+    "L": "LSTM (tuned)",
+    "G": "GRU (tuned)",
+    "CL": "CNN-LSTM (tuned)",
+    "CG": "CNN-GRU (tuned)",
+    "CLM": "CNN-LSTM-MLP (tuned)",
+    "CGM": "CNN-GRU-MLP (tuned)",
+    "CM": "CNN-MLP (tuned)",
+    "HL": "Hybrid CNN-LSTM",
+    "HG": "Hybrid CNN-GRU",
+    "HB": "Hybrid CNN-BiGRU",
 }
 
 
@@ -99,6 +43,12 @@ def load_lr_benchmark() -> dict[tuple[int, int], float]:
         (int(row.input_window), int(row.output_window)): float(row.MAE_test)
         for row in lr_df.itertuples(index=False)
     }
+
+
+def _check_complete(name: str, data: dict[tuple[int, int], dict[str, float | str]]) -> None:
+    missing = [window for window in WINDOWS if window not in data]
+    if missing:
+        raise ValueError(f"{name} is missing window results: {missing}")
 
 
 def load_mlp_best() -> dict[tuple[int, int], dict[str, float | str]]:
@@ -129,8 +79,102 @@ def load_mlp_best() -> dict[tuple[int, int], dict[str, float | str]]:
     }
 
 
+def load_cnn_best() -> dict[tuple[int, int], dict[str, float | str]]:
+    path = DATA_DIR / "cnn" / "cnn_all_results.csv"
+    all_rows = pd.read_csv(path)
+    idx = all_rows.groupby(["input_window", "output_window"])["MAE_test"].idxmin()
+    best_df = (
+        all_rows.loc[idx]
+        .sort_values(["input_window", "output_window"])
+        .reset_index(drop=True)
+    )
+    return {
+        (int(row.input_window), int(row.output_window)): {
+            "model": str(row.model),
+            "mae": float(row.MAE_test),
+        }
+        for row in best_df.itertuples(index=False)
+    }
+
+
+def _parse_markdown_detail_table(
+    path: Path,
+    heading: str,
+    label_map: dict[str, str] | None = None,
+) -> dict[tuple[int, int], dict[str, float | str]]:
+    """Read a report detail table with input/output/model/MAE_test columns."""
+    lines = path.read_text(encoding="utf-8").splitlines()
+    try:
+        start = lines.index(heading)
+    except ValueError as exc:
+        raise ValueError(f"Heading not found in {path}: {heading}") from exc
+
+    table_lines: list[str] = []
+    for line in lines[start + 1:]:
+        if line.startswith("## "):
+            break
+        if line.startswith("|"):
+            table_lines.append(line)
+
+    if len(table_lines) < 3:
+        raise ValueError(f"No Markdown table found below {heading} in {path}")
+
+    header = [cell.strip() for cell in table_lines[0].strip("|").split("|")]
+    required = ["input_window", "output_window", "model_type", "MAE_test"]
+    missing = [col for col in required if col not in header]
+    if missing:
+        raise ValueError(f"{path} table is missing columns: {missing}")
+
+    result: dict[tuple[int, int], dict[str, float | str]] = {}
+    for line in table_lines[2:]:
+        cells = [cell.strip() for cell in line.strip("|").split("|")]
+        if len(cells) != len(header):
+            continue
+        row = dict(zip(header, cells))
+        model = row["model_type"].strip("`")
+        if label_map is not None:
+            model = label_map.get(model, model)
+        window = (int(row["input_window"]), int(row["output_window"]))
+        result[window] = {
+            "model": model,
+            "mae": float(row["MAE_test"].strip("`")),
+        }
+    return result
+
+
+def load_rnn_best() -> dict[tuple[int, int], dict[str, float | str]]:
+    return _parse_markdown_detail_table(
+        MODEL_DIR / "rnn" / "rnn_vs_lr_report.md",
+        "## Best RNN Per Window — Detail",
+    )
+
+
+def load_mixtos_best() -> dict[tuple[int, int], dict[str, float | str]]:
+    return _parse_markdown_detail_table(
+        MODEL_DIR / "mixtos" / "mixtos_vs_lr_report.md",
+        "## Best Mixed Model Per Window — Detail",
+        MIXTOS_LABELS,
+    )
+
+
+def sync_hybrid_test_comparison() -> None:
+    """Keep the competition CSV aligned with the hybrid test-MAE report."""
+    src = DATA_DIR / "mixtos" / "cnn_rnn_hybrid" / "hybrid_best_test_comparison_vs_lr.csv"
+    if not src.exists():
+        raise FileNotFoundError(
+            f"Missing hybrid test comparison CSV: {src}. "
+            "Run `python model/mixtos/generate_mixtos_report.py` first."
+        )
+    dst = Path(__file__).parent / "hybrid_comparison_vs_lr.csv"
+    dst.write_bytes(src.read_bytes())
+
+
 LR = load_lr_benchmark()
 MLP_BEST = load_mlp_best()
+CNN_BEST = load_cnn_best()
+RNN_BEST = load_rnn_best()
+MIXTOS_BEST = load_mixtos_best()
+sync_hybrid_test_comparison()
 
 FAMILIES = {
     "MLP":    MLP_BEST,
@@ -139,9 +183,8 @@ FAMILIES = {
     "Mixtos": MIXTOS_BEST,
 }
 
-INPUT_WINDOWS  = [5, 10, 30, 90]
-OUTPUT_WINDOWS = [1, 5, 30, 90]
-WINDOWS = [(i, o) for i in INPUT_WINDOWS for o in OUTPUT_WINDOWS]
+for family_name, family_data in FAMILIES.items():
+    _check_complete(family_name, family_data)
 
 
 # ---------------------------------------------------------------------------

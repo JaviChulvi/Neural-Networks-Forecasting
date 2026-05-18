@@ -25,9 +25,12 @@ The main notebook logs all runs in MLflow and exports CSV summaries under `data/
 Generated outputs are written to:
 
 - `data/mixtos/cnn_rnn_hybrid/hybrid_all_results.csv`
-- `data/mixtos/cnn_rnn_hybrid/hybrid_best_by_window.csv`
-- `data/mixtos/cnn_rnn_hybrid/hybrid_comparison_vs_lr.csv`
+- `data/mixtos/cnn_rnn_hybrid/hybrid_best_by_window.csv` (winner selected by validation MAE)
+- `data/mixtos/cnn_rnn_hybrid/hybrid_comparison_vs_lr.csv` (validation-selected winner vs LR)
+- `data/mixtos/cnn_rnn_hybrid/hybrid_best_by_window_test.csv` (winner selected by test MAE for reporting)
+- `data/mixtos/cnn_rnn_hybrid/hybrid_best_test_comparison_vs_lr.csv` (test-selected winner vs LR)
 - `data/mixtos/cnn_rnn_hybrid/hybrid_test_mae_matrix.csv`
+- `data/mixtos/cnn_rnn_hybrid/hybrid_best_test_mae_matrix.csv`
 - `data/mixtos/cnn_rnn_hybrid/history/`
 - `data/mixtos/cnn_rnn_hybrid/plots/`
 
